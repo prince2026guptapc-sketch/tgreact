@@ -1,17 +1,14 @@
 {
-  "name": "telegram-smm-bot",
-  "version": "2.0.0",
-  "main": "index.js",
+  "name": "telegram-smm-bot-vercel",
+  "version": "3.0.0",
+  "private": true,
   "type": "commonjs",
   "scripts": {
-    "start": "node index.js"
-  },
-  "engines": {
-    "node": ">=20.0.0"
+    "dev": "vercel dev"
   },
   "dependencies": {
     "node-telegram-bot-api": "^0.66.0",
     "axios": "^1.7.7",
-    "better-sqlite3": "^11.3.0"
+    "@libsql/client": "^0.14.0"
   }
 }
