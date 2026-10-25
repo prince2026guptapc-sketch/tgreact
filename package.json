@@ -1,21 +1,16 @@
 {
-  "name": "telegram-smm-bot-vercel",
-  "version": "3.0.0",
+  "name": "tgreact",
+  "version": "1.0.0",
   "private": true,
-  "type": "commonjs",
   "scripts": {
-    "dev": "vercel dev"
+    "start": "node api/webhook.js"
   },
   "dependencies": {
     "node-telegram-bot-api": "^0.66.0",
     "axios": "^1.7.7",
     "@libsql/client": "^0.14.0"
-  }
-}
-"vercel": {
-  "functions": {
-    "api/webhook.js": {
-      "runtime": "nodejs20.x"
-    }
+  },
+  "engines": {
+    "node": "20.x"
   }
 }
