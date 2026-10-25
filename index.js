@@ -7,7 +7,7 @@ const axios = require('axios');
 const bot = new TelegramBot(BOT_TOKEN, {
   request: {
     agentOptions: {
-      family: 4 // Force IPv4
+      family: 4
     }
   }
 });
