@@ -13,7 +13,7 @@ const HARDCODED_SERVICE_ID = '5160';
 
 // 📌 YAHAN APNE CHANNEL KE USERNAME DAALEIN (Bina @ ke)
 // Agar multiple channels hain, toh comma laga kar add karein. Example: ['mychannel1', 'mychannel2']
-const ALLOWED_CHANNELS = ['your_channel_username_here']; 
+const ALLOWED_CHANNELS = ['damanpr0', 'Tricky_Earner_Is_Live']; 
 
 // Default Quantity
 const DEFAULT_QTY = 10; 
