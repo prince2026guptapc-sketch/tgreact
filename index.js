@@ -1,32 +1,28 @@
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
-const { createClient } = require('@libsql/client/web');
 
 // ==========================================
-// 1. CONFIGURATIONS
+// 1. CONFIGURATIONS (Hardcoded & Variables)
 // ==========================================
-// Bot Token Vercel Environment Variable se aayega
 const BOT_TOKEN = process.env.BOT_TOKEN; 
+const HARDCODED_API_KEY = process.env.SMM_API_KEY; 
 
-// Hardcoded Values (As requested)
 const ADMIN_IDS = [6402927432]; 
 const HARDCODED_API_URL = 'https://smmlite.com/api/v2';
 const HARDCODED_SERVICE_ID = '5160';
 
-// API Key Vercel Environment Variable se aayegi
-const HARDCODED_API_KEY = process.env.SMM_API_KEY; 
+// 📌 YAHAN APNE CHANNEL KE USERNAME DAALEIN (Bina @ ke)
+// Agar multiple channels hain, toh comma laga kar add karein. Example: ['mychannel1', 'mychannel2']
+const ALLOWED_CHANNELS = 'damanpr0'; 
+
+// Default Quantity
+const DEFAULT_QTY = 10; 
 
 // ==========================================
 // 2. SETUP
 // ==========================================
 const isAdmin = (id) => ADMIN_IDS.includes(id);
 const bot = new TelegramBot(BOT_TOKEN);
-
-// Turso Database Init
-const db = createClient({
-  url: process.env.TURSO_DATABASE_URL,
-  authToken: process.env.TURSO_AUTH_TOKEN,
-});
 
 const PANELS = [
   {
@@ -37,46 +33,16 @@ const PANELS = [
   }
 ];
 
-const DEFAULT_QTY = 10;
-const cleanServiceId = (id) => String(id || '').replace(/^#/, '').trim();
-
-// DB Helpers
-async function getState(key) {
-  const r = await db.execute({ sql: 'SELECT value FROM state WHERE key = ?', args: [key] });
-  return r.rows[0]?.value;
-}
-async function setState(key, value) {
-  await db.execute({ sql: 'INSERT INTO state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', args: [key, String(value)] });
-}
-async function getQty() { return Number((await getState('quantity')) || DEFAULT_QTY); }
-async function getServiceId() { return cleanServiceId((await getState('service_id')) || HARDCODED_SERVICE_ID); }
-async function isDuplicate(msgId) {
-  const r = await db.execute({ sql: 'SELECT 1 FROM processed WHERE message_id = ?', args: [msgId] });
-  return r.rows.length > 0;
-}
-async function markProcessed(msgId) {
-  await db.execute({ sql: 'INSERT OR IGNORE INTO processed (message_id, processed_at) VALUES (?, ?)', args: [msgId, Date.now()] });
-}
-async function insertOrder(msgId, orderId, panel, status) {
-  await db.execute({ sql: 'INSERT INTO orders (message_id, order_id, panel, status, created_at) VALUES (?, ?, ?, ?, ?)', args: [msgId, orderId, panel, status, Date.now()] });
-}
-async function listChannels() { return (await db.execute('SELECT * FROM channels WHERE active = 1 ORDER BY added_at DESC')).rows; }
-async function addChannel(username, chatId, title, addedBy) {
-  await db.execute({ sql: 'INSERT INTO channels (username, chat_id, title, added_by, added_at, active) VALUES (?, ?, ?, ?, ?, 1) ON CONFLICT(username) DO UPDATE SET active = 1, title = excluded.title', args: [username.replace(/^@/, '').toLowerCase(), chatId, title, addedBy, Date.now()] });
-}
-async function removeChannel(username) {
-  await db.execute({ sql: 'UPDATE channels SET active = 0 WHERE username = ?', args: [username.replace(/^@/, '').toLowerCase()] });
-}
-async function getChannel(username) {
-  return (await db.execute({ sql: 'SELECT * FROM channels WHERE username = ? AND active = 1', args: [username.replace(/^@/, '').toLowerCase()] })).rows[0];
-}
+// In-memory storage for stats (will reset on Vercel restart)
+let ordersCount = 0;
+let failedCount = 0;
 
 // Place Order Logic
 async function placeOrderWithFallback(link, quantity, serviceOverride) {
   const errors = [];
   for (const panel of PANELS) {
     try {
-      const serviceId = serviceOverride || cleanServiceId(panel.service);
+      const serviceId = serviceOverride || panel.service;
       const { data } = await axios.post(panel.url, { key: panel.key, action: 'add', service: serviceId, link, quantity }, { timeout: 15000 });
       if (data?.error) throw new Error(data.error);
       if (!data?.order) throw new Error('No order ID');
@@ -93,22 +59,16 @@ const mainMenu = {
       [{ text: '📊 Stats', callback_data: 'stats' }, { text: '💰 Balance', callback_data: 'balance' }],
       [{ text: '📡 Channels', callback_data: 'channels' }, { text: '🔢 Quantity', callback_data: 'qty' }],
       [{ text: '⚙️ Service', callback_data: 'service' }, { text: '🔌 Panels', callback_data: 'panels' }],
-      [{ text: '➕ Add Channel', callback_data: 'add_help' }, { text: '➖ Remove', callback_data: 'remove_help' }],
-      [{ text: '🔄 Refresh', callback_data: 'refresh' }],
     ],
   },
   parse_mode: 'Markdown',
 };
 
-async function menuText() {
-  const chans = await listChannels();
-  const chanList = chans.length ? chans.map(c => `@${c.username}`).join(', ') : '_none_';
-  return `🤖 *SMM Bot*\n\n📡 Channels: ${chanList}\n🔢 Quantity: *${await getQty()}*\n⚙️ Service: *${await getServiceId()}*\n🔌 Panels: *${PANELS.length}*\n\nTap a button below 👇`;
-}
+const menuText = `🤖 *SMM Bot*\n\nTap a button below 👇`;
 
-bot.onText(/^\/start$/, async (msg) => {
+bot.onText(/^\/start$/, (msg) => {
   if (!isAdmin(msg.from.id)) return bot.sendMessage(msg.chat.id, '❌ Not admin');
-  bot.sendMessage(msg.chat.id, await menuText(), mainMenu);
+  bot.sendMessage(msg.chat.id, menuText, mainMenu);
 });
 
 bot.on('callback_query', async (query) => {
@@ -121,10 +81,7 @@ bot.on('callback_query', async (query) => {
   try {
     switch (query.data) {
       case 'stats': {
-        const total = (await db.execute('SELECT COUNT(*) c FROM orders')).rows[0].c;
-        const ok = (await db.execute("SELECT COUNT(*) c FROM orders WHERE status='ok'")).rows[0].c;
-        const fail = (await db.execute("SELECT COUNT(*) c FROM orders WHERE status='fail'")).rows[0].c;
-        return bot.editMessageText(`📊 *Stats*\n\nTotal: *${total}*\n✅ OK: *${ok}*\n❌ Fail: *${fail}*`, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
+        return bot.editMessageText(`📊 *Stats*\n\nTotal OK: *${ordersCount}*\nTotal Fail: *${failedCount}*\n\n_(Stats reset on bot restart)_`, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
       }
       case 'balance': {
         const lines = [];
@@ -137,83 +94,35 @@ bot.on('callback_query', async (query) => {
         return bot.editMessageText(`💰 *Balances*\n\n${lines.join('\n')}`, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
       }
       case 'channels': {
-        const rows = await listChannels();
-        const text = rows.length ? `📡 *Active Channels*\n\n` + rows.map((c, i) => `${i + 1}. *${c.title || c.username}*\n   @${c.username}`).join('\n\n') : `📡 *Active Channels*\n\n_none_`;
+        const text = `📡 *Allowed Channels*\n\n` + ALLOWED_CHANNELS.map(c => `@${c}`).join('\n');
         return bot.editMessageText(text, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
       }
-      case 'qty': return bot.editMessageText(`🔢 *Quantity*\n\n*${await getQty()}*\n\nChange: \`/setqty 200\``, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
-      case 'service': return bot.editMessageText(`⚙️ *Service ID*\n\nCurrent: *${await getServiceId()}*\n\nChange: \`/setservice 2300\``, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
-      case 'panels': return bot.editMessageText(`🔌 *Configured Panels*\n\n` + PANELS.map((p, i) => `${i + 1}. *${p.name}* — service \`${cleanServiceId(p.service)}\``).join('\n'), { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
-      case 'add_help': return bot.editMessageText(`➕ *Add Channel*\n\n\`/addchannel @channelname\``, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
-      case 'remove_help': return bot.editMessageText(`➖ *Remove Channel*\n\n\`/removechannel @channelname\``, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
-      case 'refresh': return bot.editMessageText(await menuText(), { chat_id: chatId, message_id: msgId, ...mainMenu });
+      case 'qty': return bot.editMessageText(`🔢 *Quantity*\n\n*${DEFAULT_QTY}*`, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
+      case 'service': return bot.editMessageText(`⚙️ *Service ID*\n\nCurrent: *${HARDCODED_SERVICE_ID}*`, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
+      case 'panels': return bot.editMessageText(`🔌 *Configured Panels*\n\n1. *Smmlite* — service \`${HARDCODED_SERVICE_ID}\``, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
+      case 'refresh': return bot.editMessageText(menuText, { chat_id: chatId, message_id: msgId, ...mainMenu });
     }
   } catch (err) { console.error('Callback error:', err.message); }
-});
-
-bot.onText(/^\/setqty\s+(\d+)/, async (msg, match) => {
-  if (!isAdmin(msg.from.id)) return;
-  const qty = Number(match[1]);
-  if (!qty || qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid number');
-  await setState('quantity', qty);
-  bot.sendMessage(msg.chat.id, `✅ Quantity set to *${qty}*`, {parse_mode: 'Markdown'});
-});
-
-bot.onText(/^\/setservice\s+(\S+)/, async (msg, match) => {
-  if (!isAdmin(msg.from.id)) return;
-  const newId = cleanServiceId(match[1]);
-  if (!newId) return bot.sendMessage(msg.chat.id, '❌ Invalid service ID');
-  await setState('service_id', newId);
-  bot.sendMessage(msg.chat.id, `✅ Service ID set to *${newId}*`, {parse_mode: 'Markdown'});
-});
-
-bot.onText(/^\/addchannel(?:\s+@?(\S+))?/, async (msg, match) => {
-  if (!isAdmin(msg.from.id)) return;
-  const username = match[1];
-  if (!username) return bot.sendMessage(msg.chat.id, 'Usage: `/addchannel @channelname`', {parse_mode: 'Markdown'});
-  const clean = username.replace(/^@/, '').toLowerCase();
-  try {
-    const chat = await bot.getChat(`@${clean}`);
-    await addChannel(clean, chat.id, chat.title, msg.from.id);
-    bot.sendMessage(msg.chat.id, `✅ Added ${chat.title} (@${clean})\n\n⚠️ Make bot admin in that channel.`);
-  } catch (e) {
-    bot.sendMessage(msg.chat.id, `❌ Could not resolve @${clean}: ${e.message}`);
-  }
-});
-
-bot.onText(/^\/removechannel(?:\s+@?(\S+))?/, async (msg, match) => {
-  if (!isAdmin(msg.from.id)) return;
-  const username = match[1];
-  if (!username) return bot.sendMessage(msg.chat.id, 'Usage: `/removechannel @channelname`', {parse_mode: 'Markdown'});
-  await removeChannel(username);
-  bot.sendMessage(msg.chat.id, `🗑️ Removed @${username.replace(/^@/, '')}`);
-});
-
-bot.onText(/^\/channels$/, async (msg) => {
-  if (!isAdmin(msg.from.id)) return;
-  const rows = await listChannels();
-  if (!rows.length) return bot.sendMessage(msg.chat.id, 'No channels added yet.');
-  const text = rows.map((c, i) => `${i + 1}. ${c.title || c.username} — @${c.username}`).join('\n');
-  bot.sendMessage(msg.chat.id, `📡 Channels:\n${text}`);
 });
 
 // Auto Order on Channel Post
 bot.on('channel_post', async (msg) => {
   try {
     const username = msg.chat.username?.toLowerCase();
-    if (!username || !(await getChannel(username)) || await isDuplicate(msg.message_id)) return;
-    await markProcessed(msg.message_id);
+    
+    // Check if channel is in our allowed list
+    if (!username || !ALLOWED_CHANNELS.includes(username)) return;
 
     const link = `https://t.me/${username}/${msg.message_id}`;
-    const quantity = await getQty();
-    const serviceId = await getServiceId();
-
-    const result = await placeOrderWithFallback(link, quantity, serviceId);
+    
+    const result = await placeOrderWithFallback(link, DEFAULT_QTY, HARDCODED_SERVICE_ID);
 
     if (result.ok) {
-      await insertOrder(msg.message_id, String(result.orderId), result.panel, 'ok');
+      ordersCount++;
+      console.log(`✅ Order success: ${link} | ID: ${result.orderId}`);
     } else {
-      await insertOrder(msg.message_id, null, null, 'fail');
+      failedCount++;
+      console.log(`❌ Order failed: ${link} | ${result.errors.join(', ')}`);
       for (const id of ADMIN_IDS) {
         bot.sendMessage(id, `❌ Order failed for ${link}\n\n${result.errors.join('\n')}`).catch(() => {});
       }
