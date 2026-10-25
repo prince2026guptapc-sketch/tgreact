@@ -1,16 +1,13 @@
 {
-    "name": "tgreact",
-      "version": "1.0.0",
-        "private": true,
-          "scripts": {
-              "start": "node api/webhook.js"
-                },
-                  "dependencies": {
-                      "node-telegram-bot-api": "^0.66.0",
-                          "axios": "^1.7.7",
-                              "@libsql/client": "^0.14.0"
-                                },
-                                  "engines": {
-                                      "node": "20.x"
-                                        }
+  "name": "tgreact",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node api/webhook.js"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.66.0",
+    "axios": "^1.7.7",
+    "@libsql/client": "^0.14.0"
+  }
 }
