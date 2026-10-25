@@ -4,7 +4,13 @@ const axios = require('axios');
 // ==========================================
 // 1. CONFIGURATIONS (Hardcoded & Variables)
 // ==========================================
-const BOT_TOKEN = process.env.BOT_TOKEN; 
+const bot = new TelegramBot(BOT_TOKEN, {
+  request: {
+    agentOptions: {
+      family: 4 // Force IPv4
+    }
+  }
+});
 const HARDCODED_API_KEY = process.env.SMM_API_KEY; 
 
 const ADMIN_IDS = [6402927432]; 
