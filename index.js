@@ -3,20 +3,18 @@ const axios = require('axios');
 const { createClient } = require('@libsql/client/web');
 
 // ==========================================
-// 1. HARDCODED CONFIGURATIONS
+// 1. CONFIGURATIONS
 // ==========================================
-// Aapka Telegram Bot Token
-const BOT_TOKEN = '8717668205:AAGe3-218SMM7kCP_aAZL3CNWWn7O24gJGQ'; 
+// Bot Token Vercel Environment Variable se aayega
+const BOT_TOKEN = process.env.BOT_TOKEN; 
 
-// Aapka Admin ID
+// Hardcoded Values (As requested)
 const ADMIN_IDS = [6402927432]; 
-
-// Aapka SMM Panel Details
 const HARDCODED_API_URL = 'https://smmlite.com/api/v2';
 const HARDCODED_SERVICE_ID = '5160';
 
-// ⚠️ YAHAN APNI SMMLITE API KEY DAALEIN (Single quotes ke beech mein)
-const HARDCODED_API_KEY = 'b2f8c005b60131f93996c2750caa699f'; 
+// API Key Vercel Environment Variable se aayegi
+const HARDCODED_API_KEY = process.env.SMM_API_KEY; 
 
 // ==========================================
 // 2. SETUP
@@ -24,7 +22,7 @@ const HARDCODED_API_KEY = 'b2f8c005b60131f93996c2750caa699f';
 const isAdmin = (id) => ADMIN_IDS.includes(id);
 const bot = new TelegramBot(BOT_TOKEN);
 
-// Turso Database Init (Yeh Vercel Variables se hi aayega)
+// Turso Database Init
 const db = createClient({
   url: process.env.TURSO_DATABASE_URL,
   authToken: process.env.TURSO_AUTH_TOKEN,
