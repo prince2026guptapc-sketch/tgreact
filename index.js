@@ -138,19 +138,19 @@ bot.on('channel_post', async (msg) => {
   } catch (err) { console.error('Handler error:', err.message); }
 });
 
-// Vercel Function ka timeout 60 seconds set karne ke liye
-module.exports.config = {
-  maxDuration: 60
-};
-
-// ⚠️ VERCEL ENTRY POINT
+// ⚠️ VERCEL ENTRY POINT (Fixed for POST requests)
 module.exports = async (req, res) => {
   try {
+    // Sirf POST requests accept karein
     if (req.method === 'POST') {
       await bot.processUpdate(req.body);
+      return res.status(200).send('OK');
+    } else {
+      // Agar koi browser se GET request kare toh 405 bhejein
+      return res.status(405).send('Method Not Allowed');
     }
-    res.status(200).send('OK');
   } catch (err) {
-    res.status(200).send('OK');
+    console.error('Webhook Error:', err);
+    return res.status(200).send('OK'); // Telegram ko 200 hi chahiye hota hai
   }
 };
