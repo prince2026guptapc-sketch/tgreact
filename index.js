@@ -137,7 +137,18 @@ bot.on('channel_post', async (msg) => {
     }
   } catch (err) { console.error('Handler error:', err.message); }
 });
-
+// Test route (browser mein /test kholne par chalega)
+if (req.url === '/test') {
+  try {
+    const test = await axios.post('https://smmlite.com/api/v2', {
+      key: process.env.SMM_API_KEY,
+      action: 'balance'
+    }, { timeout: 10000 });
+    return res.status(200).json({ success: true, data: test.data });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+}
 // ⚠️ VERCEL ENTRY POINT
 module.exports = async (req, res) => {
   try {
