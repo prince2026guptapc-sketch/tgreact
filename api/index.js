@@ -14,7 +14,7 @@ const HARDCODED_SERVICE_ID = '5160';
 // 📌 YAHAN APNE CHANNEL KE USERNAME DAALEIN (Bina @ ke)
 const ALLOWED_CHANNELS = ['damanpr0']; 
 
-const DEFAULT_QTY = 10; 
+const DEFAULT_QTY = 16; 
 
 // ==========================================
 // 2. SETUP
@@ -49,7 +49,7 @@ async function placeOrderWithFallback(link, quantity, serviceOverride) {
     try {
       const serviceId = serviceOverride || panel.service;
       // Timeout 9 seconds rakha hai taaki Vercel limit cross na ho
-      const { data } = await axios.post(panel.url, { key: panel.key, action: 'add', service: serviceId, link, quantity }, { timeout: 9000 });
+      const { data } = await axios.post(panel.url, { key: panel.key, action: 'add', service: serviceId, link, quantity }, { timeout: 12000 });
       if (data?.error) throw new Error(data.error);
       if (!data?.order) throw new Error('No order ID');
       return { ok: true, panel: panel.name, orderId: data.order };
