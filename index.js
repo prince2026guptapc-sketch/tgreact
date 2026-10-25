@@ -2,7 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 
 // ==========================================
-// 1. CONFIGURATIONS (Hardcoded & Variables)
+// 1. CONFIGURATIONS
 // ==========================================
 const BOT_TOKEN = process.env.BOT_TOKEN; 
 const HARDCODED_API_KEY = process.env.SMM_API_KEY; 
@@ -12,10 +12,8 @@ const HARDCODED_API_URL = 'https://smmlite.com/api/v2';
 const HARDCODED_SERVICE_ID = '5160';
 
 // 📌 YAHAN APNE CHANNEL KE USERNAME DAALEIN (Bina @ ke)
-// Agar multiple channels hain, toh comma laga kar add karein. Example: ['mychannel1', 'mychannel2']
-const ALLOWED_CHANNELS = ['damanpr0', 'Tricky_Earner_Is_Live']; 
+const ALLOWED_CHANNELS = ['damanpr0']; 
 
-// Default Quantity
 const DEFAULT_QTY = 10; 
 
 // ==========================================
@@ -23,7 +21,7 @@ const DEFAULT_QTY = 10;
 // ==========================================
 const isAdmin = (id) => ADMIN_IDS.includes(id);
 
-// IPv4 force fix (Syntax Error solved)
+// IPv4 force (Network issue fix)
 const bot = new TelegramBot(BOT_TOKEN, {
   request: {
     agentOptions: {
@@ -41,7 +39,6 @@ const PANELS = [
   }
 ];
 
-// In-memory storage for stats (will reset on Vercel restart)
 let ordersCount = 0;
 let failedCount = 0;
 
@@ -51,11 +48,14 @@ async function placeOrderWithFallback(link, quantity, serviceOverride) {
   for (const panel of PANELS) {
     try {
       const serviceId = serviceOverride || panel.service;
-      const { data } = await axios.post(panel.url, { key: panel.key, action: 'add', service: serviceId, link, quantity }, { timeout: 15000 });
+      // Timeout 8 seconds rakha hai taaki Vercel 10s par kill na kare
+      const { data } = await axios.post(panel.url, { key: panel.key, action: 'add', service: serviceId, link, quantity }, { timeout: 8000 });
       if (data?.error) throw new Error(data.error);
       if (!data?.order) throw new Error('No order ID');
       return { ok: true, panel: panel.name, orderId: data.order };
-    } catch (err) { errors.push(`${panel.name}: ${err.message}`); }
+    } catch (err) { 
+      errors.push(`${panel.name}: ${err.message}`); 
+    }
   }
   return { ok: false, errors };
 }
@@ -95,7 +95,7 @@ bot.on('callback_query', async (query) => {
         const lines = [];
         for (const p of PANELS) {
           try {
-            const { data } = await axios.post(p.url, { key: p.key, action: 'balance' }, { timeout: 4000 });
+            const { data } = await axios.post(p.url, { key: p.key, action: 'balance' }, { timeout: 8000 });
             lines.push(`*${p.name}*: ${data.balance} ${data.currency || ''}`);
           } catch (e) { lines.push(`*${p.name}*: ❌ ${e.message}`); }
         }
@@ -118,7 +118,6 @@ bot.on('channel_post', async (msg) => {
   try {
     const username = msg.chat.username?.toLowerCase();
     
-    // Check if channel is in our allowed list
     if (!username || !ALLOWED_CHANNELS.includes(username)) return;
 
     const link = `https://t.me/${username}/${msg.message_id}`;
@@ -138,19 +137,23 @@ bot.on('channel_post', async (msg) => {
   } catch (err) { console.error('Handler error:', err.message); }
 });
 
-// ⚠️ VERCEL ENTRY POINT (Fixed for POST requests)
+// ==========================================
+// ⚠️ VERCEL ENTRY POINT (Fixed 405 Error)
+// ==========================================
 module.exports = async (req, res) => {
+  // Set CORS headers (optional but good practice)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  
   try {
-    // Sirf POST requests accept karein
     if (req.method === 'POST') {
       await bot.processUpdate(req.body);
       return res.status(200).send('OK');
     } else {
-      // Agar koi browser se GET request kare toh 405 bhejein
-      return res.status(405).send('Method Not Allowed');
+      // Agar koi browser se URL kholta hai toh 200 OK bhejenge taaki koi error na aaye
+      return res.status(200).send('Bot is running!');
     }
   } catch (err) {
     console.error('Webhook Error:', err);
-    return res.status(200).send('OK'); // Telegram ko 200 hi chahiye hota hai
+    return res.status(200).send('OK'); // Telegram ko hamesha 200 chahiye hota hai
   }
 };
