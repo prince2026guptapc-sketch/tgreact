@@ -4,13 +4,7 @@ const axios = require('axios');
 // ==========================================
 // 1. CONFIGURATIONS (Hardcoded & Variables)
 // ==========================================
-const bot = new TelegramBot(BOT_TOKEN, {
-  request: {
-    agentOptions: {
-      family: 4
-    }
-  }
-});
+const BOT_TOKEN = process.env.BOT_TOKEN; 
 const HARDCODED_API_KEY = process.env.SMM_API_KEY; 
 
 const ADMIN_IDS = [6402927432]; 
@@ -19,7 +13,7 @@ const HARDCODED_SERVICE_ID = '5160';
 
 // 📌 YAHAN APNE CHANNEL KE USERNAME DAALEIN (Bina @ ke)
 // Agar multiple channels hain, toh comma laga kar add karein. Example: ['mychannel1', 'mychannel2']
-const ALLOWED_CHANNELS = 'damanpr0'; 
+const ALLOWED_CHANNELS = ['your_channel_username_here']; 
 
 // Default Quantity
 const DEFAULT_QTY = 10; 
@@ -28,7 +22,15 @@ const DEFAULT_QTY = 10;
 // 2. SETUP
 // ==========================================
 const isAdmin = (id) => ADMIN_IDS.includes(id);
-const bot = new TelegramBot(BOT_TOKEN);
+
+// IPv4 force fix (Syntax Error solved)
+const bot = new TelegramBot(BOT_TOKEN, {
+  request: {
+    agentOptions: {
+      family: 4
+    }
+  }
+});
 
 const PANELS = [
   {
