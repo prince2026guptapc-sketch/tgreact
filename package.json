@@ -12,3 +12,10 @@
     "@libsql/client": "^0.14.0"
   }
 }
+"vercel": {
+  "functions": {
+    "api/webhook.js": {
+      "runtime": "nodejs20.x"
+    }
+  }
+}
