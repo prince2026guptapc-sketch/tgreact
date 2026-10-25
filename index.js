@@ -138,6 +138,11 @@ bot.on('channel_post', async (msg) => {
   } catch (err) { console.error('Handler error:', err.message); }
 });
 
+// Vercel Function ka timeout 60 seconds set karne ke liye
+module.exports.config = {
+  maxDuration: 60
+};
+
 // ⚠️ VERCEL ENTRY POINT
 module.exports = async (req, res) => {
   try {
