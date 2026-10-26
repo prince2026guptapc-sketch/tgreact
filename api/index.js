@@ -11,21 +11,20 @@ const ADMIN_IDS = [6402927432];
 const HARDCODED_API_URL = 'https://smmlite.com/api/v2';
 const HARDCODED_SERVICE_ID = '5160';
 
-// 📌 YAHAN APNE CHANNEL KE USERNAME DAALEIN (Bina @ ke)
 const ALLOWED_CHANNELS = ['damanpr0']; 
 
-const DEFAULT_QTY = 16; 
+// 📌 Default Quantity (Isko /setqty se change kar sakte hain)
+let currentQty = 17; 
 
 // ==========================================
 // 2. SETUP
 // ==========================================
 const isAdmin = (id) => ADMIN_IDS.includes(id);
 
-// IPv4 force fix (Network issue solved)
 const bot = new TelegramBot(BOT_TOKEN, {
   request: {
     agentOptions: {
-      family: 4
+      family: 4 // IPv4 force
     }
   }
 });
@@ -48,8 +47,8 @@ async function placeOrderWithFallback(link, quantity, serviceOverride) {
   for (const panel of PANELS) {
     try {
       const serviceId = serviceOverride || panel.service;
-      // Timeout 9 seconds rakha hai taaki Vercel limit cross na ho
-      const { data } = await axios.post(panel.url, { key: panel.key, action: 'add', service: serviceId, link, quantity }, { timeout: 12000 });
+      // Timeout badha kar 20 seconds kar diya gaya hai
+      const { data } = await axios.post(panel.url, { key: panel.key, action: 'add', service: serviceId, link, quantity }, { timeout: 20000 });
       if (data?.error) throw new Error(data.error);
       if (!data?.order) throw new Error('No order ID');
       return { ok: true, panel: panel.name, orderId: data.order };
@@ -79,6 +78,19 @@ bot.onText(/^\/start$/, (msg) => {
   bot.sendMessage(msg.chat.id, menuText, mainMenu);
 });
 
+// 📌 NAYA FEATURE: /setqty Command
+bot.onText(/^\/setqty\s+(\d+)$/, (msg, match) => {
+  if (!isAdmin(msg.from.id)) return;
+  
+  const qty = parseInt(match[1], 10);
+  if (isNaN(qty) || qty < 1) {
+    return bot.sendMessage(msg.chat.id, '❌ Invalid quantity. Please enter a number greater than 0.');
+  }
+  
+  currentQty = qty;
+  bot.sendMessage(msg.chat.id, `✅ Quantity successfully updated to *${currentQty}*`, { parse_mode: 'Markdown' });
+});
+
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
   const msgId = query.message.message_id;
@@ -95,7 +107,7 @@ bot.on('callback_query', async (query) => {
         const lines = [];
         for (const p of PANELS) {
           try {
-            const { data } = await axios.post(p.url, { key: p.key, action: 'balance' }, { timeout: 9000 });
+            const { data } = await axios.post(p.url, { key: p.key, action: 'balance' }, { timeout: 10000 });
             lines.push(`*${p.name}*: ${data.balance} ${data.currency || ''}`);
           } catch (e) { lines.push(`*${p.name}*: ❌ ${e.message}`); }
         }
@@ -105,7 +117,7 @@ bot.on('callback_query', async (query) => {
         const text = `📡 *Allowed Channels*\n\n` + ALLOWED_CHANNELS.map(c => `@${c}`).join('\n');
         return bot.editMessageText(text, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
       }
-      case 'qty': return bot.editMessageText(`🔢 *Quantity*\n\n*${DEFAULT_QTY}*`, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
+      case 'qty': return bot.editMessageText(`🔢 *Current Quantity*\n\n*${currentQty}*\n\nChange via: \`/setqty 20\``, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
       case 'service': return bot.editMessageText(`⚙️ *Service ID*\n\nCurrent: *${HARDCODED_SERVICE_ID}*`, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
       case 'panels': return bot.editMessageText(`🔌 *Configured Panels*\n\n1. *Smmlite* — service \`${HARDCODED_SERVICE_ID}\``, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
       case 'refresh': return bot.editMessageText(menuText, { chat_id: chatId, message_id: msgId, ...mainMenu });
@@ -122,7 +134,8 @@ bot.on('channel_post', async (msg) => {
 
     const link = `https://t.me/${username}/${msg.message_id}`;
     
-    const result = await placeOrderWithFallback(link, DEFAULT_QTY, HARDCODED_SERVICE_ID);
+    // Ab yahan currentQty use ho raha hai
+    const result = await placeOrderWithFallback(link, currentQty, HARDCODED_SERVICE_ID);
 
     if (result.ok) {
       ordersCount++;
@@ -138,7 +151,7 @@ bot.on('channel_post', async (msg) => {
 });
 
 // ==========================================
-// ⚠️ VERCEL ENTRY POINT (For api/index.js)
+// ⚠️ VERCEL ENTRY POINT
 // ==========================================
 module.exports = async (req, res) => {
   try {
@@ -146,7 +159,6 @@ module.exports = async (req, res) => {
       await bot.processUpdate(req.body);
       return res.status(200).send('OK');
     } else {
-      // Browser se check karne par yeh dikhega
       return res.status(200).send('Bot is running successfully!');
     }
   } catch (err) {
