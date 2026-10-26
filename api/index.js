@@ -2,7 +2,6 @@ const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 const mongoose = require('mongoose');
-const QRCode = require('qrcode');
 
 const app = express();
 app.use(express.json());
@@ -10,14 +9,13 @@ app.use(express.json());
 // ==========================================
 // CONFIGURATION
 // ==========================================
-const SUPER_ADMIN_ID = 6402927432; // Aapki Telegram ID
+const SUPER_ADMIN_ID = 6402927432; 
 const MASTER_BOT_TOKEN = process.env.BOT_TOKEN; 
-const MASTER_API_KEY = process.env.SMM_API_KEY; // Master API Key
+const MASTER_API_KEY = process.env.SMM_API_KEY; 
 
 const PANEL_URL = 'https://smmlite.com/api/v2';
 const SERVICE_ID = '5160';
 const MONGO_URI = process.env.MONGO_URI; 
-const UPI_ID = process.env.UPI_ID || 'yourupi@ybl'; 
 const PORT = process.env.PORT || 3000;
 
 const WEBHOOK_URL = process.env.RENDER_EXTERNAL_URL 
@@ -31,30 +29,27 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.log('❌ MongoDB Error:', err.message));
 
-// User Model (Customer Details)
 const User = mongoose.model('User', new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
   firstName: { type: String },
   isPremium: { type: Boolean, default: false },
   expiryDate: { type: Date, default: null },
   botToken: { type: String, default: null }, 
-  panelApiKey: { type: String, default: null }, // Optional API Key
+  panelApiKey: { type: String, default: null }, 
   channels: { type: [String], default: [] },
   quantity: { type: Number, default: 10 }
 }));
 
-// Admin Channels Model (Aapke master bot ke liye)
 const AdminChannel = mongoose.model('AdminChannel', new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   quantity: { type: Number, default: 10 }
 }));
 
 // ==========================================
-// BOT SETUP & HELPERS
+// BOT SETUP
 // ==========================================
 const activeBots = {}; 
 
-// Helper to place order
 async function placeOrder(link, quantity, apiKey) {
   try {
     const { data } = await axios.post(PANEL_URL, { 
@@ -83,13 +78,12 @@ app.post('/webhook/admin', (req, res) => {
   res.sendStatus(200);
 });
 
-// Master Bot Commands
+// Admin Menu (Fixed HTML)
 adminBot.onText(/^\/start$/, (msg) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
-  adminBot.sendMessage(msg.chat.id, `👑 <b>Master Admin Panel</b>\n\n/addchannel @channel\n/setqty @channel 50\n/approve <user_id> <days>\n/addbot <user_id> <token> <apikey_or_none> <channel1,channel2>`);
+  adminBot.sendMessage(msg.chat.id, `👑 <b>Master Admin Panel</b>\n\n<b>Commands:</b>\n/addchannel @channel\n/setqty @channel 50\n/approve &lt;user_id&gt; &lt;days&gt;\n/addbot &lt;user_id&gt; &lt;token&gt; &lt;apikey_or_none&gt; &lt;channel1,channel2&gt;`, { parse_mode: 'HTML' });
 });
 
-// Admin can add his own channels
 adminBot.onText(/^\/addchannel\s+(@\w+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
   const channel = match[1].replace('@', '').toLowerCase();
@@ -99,7 +93,6 @@ adminBot.onText(/^\/addchannel\s+(@\w+)$/, async (msg, match) => {
   } catch (err) { adminBot.sendMessage(msg.chat.id, `❌ Error: ${err.message}`); }
 });
 
-// Admin can set quantity for his channels
 adminBot.onText(/^\/setqty\s+(@\w+)\s+(\d+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
   const channel = match[1].replace('@', '').toLowerCase();
@@ -111,7 +104,6 @@ adminBot.onText(/^\/setqty\s+(@\w+)\s+(\d+)$/, async (msg, match) => {
   } catch (err) { adminBot.sendMessage(msg.chat.id, `❌ Error.`); }
 });
 
-// Admin approves customer plan
 adminBot.onText(/^\/approve\s+(\d+)\s+(\d+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
   const targetUserId = match[1];
@@ -122,13 +114,19 @@ adminBot.onText(/^\/approve\s+(\d+)\s+(\d+)$/, async (msg, match) => {
   adminBot.sendMessage(msg.chat.id, `✅ User ${targetUserId} approved for ${days} days.`);
 });
 
-// Admin adds customer bot
+// ADD BOT LOGIC
 adminBot.onText(/^\/addbot\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(.+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
+  
   const targetUserId = match[1];
   const botToken = match[2];
-  const apiKey = match[3] === 'none' ? null : match[3]; // If 'none', use master key later
+  let apiKey = match[3].trim();
   const channels = match[4].split(',').map(c => c.trim().replace('@', '').toLowerCase());
+
+  // Agar aapne 'none' likha hai toh null set karein (Master API use hoga)
+  if (apiKey.toLowerCase() === 'none') {
+    apiKey = null;
+  }
 
   try {
     const user = await User.findOneAndUpdate(
@@ -136,14 +134,13 @@ adminBot.onText(/^\/addbot\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(.+)$/, async (msg, m
       { botToken: botToken, panelApiKey: apiKey, channels: channels },
       { new: true, upsert: true }
     );
-    adminBot.sendMessage(msg.chat.id, `✅ Customer Bot added for User ${targetUserId}.`);
-    await startCustomerBot(user); // Start it immediately
+    adminBot.sendMessage(msg.chat.id, `✅ Customer Bot added for User ${targetUserId}.\nChannels: ${channels.join(', ')}`);
+    await startCustomerBot(user); 
   } catch (err) {
     adminBot.sendMessage(msg.chat.id, `❌ Error: ${err.message}`);
   }
 });
 
-// Master Bot: Listen to Admin Channels
 adminBot.on('channel_post', async (msg) => {
   const username = msg.chat.username?.toLowerCase();
   if (!username) return;
@@ -152,10 +149,8 @@ adminBot.on('channel_post', async (msg) => {
   if (!adminChannel) return;
 
   const link = `https://t.me/${username}/${msg.message_id}`;
-  // Master API Key used here
   const result = await placeOrder(link, adminChannel.quantity, MASTER_API_KEY);
   if (result.ok) console.log(`✅ [Admin] Success: ${link}`);
-  else console.log(`❌ [Admin] Failed: ${link}`);
 });
 
 // ==========================================
@@ -169,7 +164,6 @@ async function startCustomerBot(user) {
     await bot.setWebHook(`${WEBHOOK_URL}${botPath}`);
     activeBots[user.userId] = bot;
 
-    // Customer commands
     bot.onText(/^\/start$/, (msg) => {
       bot.sendMessage(msg.chat.id, `👋 <b>Welcome!</b>\nUse <code>/setqty 50</code> to change order quantity.`, { parse_mode: 'HTML' });
     });
@@ -181,7 +175,6 @@ async function startCustomerBot(user) {
       bot.sendMessage(msg.chat.id, `✅ Quantity updated to <b>${qty}</b> for all your channels.`, { parse_mode: 'HTML' });
     });
 
-    // Customer channels listener
     bot.on('channel_post', async (msg) => {
       const username = msg.chat.username?.toLowerCase();
       if (!username) return;
@@ -191,8 +184,6 @@ async function startCustomerBot(user) {
       if (!dbUser.channels.includes(username)) return;
 
       const link = `https://t.me/${username}/${msg.message_id}`;
-      
-      // LOGIC: If customer has API key, use it. Otherwise use Master API Key.
       const apiKeyToUse = dbUser.panelApiKey ? dbUser.panelApiKey : MASTER_API_KEY;
 
       const result = await placeOrder(link, dbUser.quantity, apiKeyToUse);
@@ -206,7 +197,6 @@ async function startCustomerBot(user) {
   }
 }
 
-// Routes for Customer Webhooks
 app.post('/webhook/:userId', (req, res) => {
   const userId = req.params.userId;
   if (activeBots[userId]) {
