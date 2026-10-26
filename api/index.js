@@ -150,7 +150,7 @@ bot.onText(/^\/buybot$/, async (msg) => {
     const qrBuffer = await QRCode.toBuffer(upiUrl);
     
     bot.sendPhoto(chatId, qrBuffer, {
-      caption: `🤖 <b>Premium Bot Subscription</b>\n\n💵 <b>Amount:</b> ₹${amount} / Week\n\nPay using any UPI App (GPay, PhonePe, Paytm).\n\n<b>After payment, send screenshot to @YourTelegramUsername for approval.</b>`,
+      caption: `🤖 <b>Premium Bot Subscription</b>\n\n💵 <b>Amount:</b> ₹${amount} / Week\n\nPay using any UPI App (GPay, PhonePe, Paytm).\n\n<b>After payment, send screenshot to @zetagamer0 for approval.</b>`,
       parse_mode: 'HTML'
     });
   } catch (err) {
