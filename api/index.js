@@ -10,13 +10,13 @@ app.use(express.json());
 // ==========================================
 // CONFIGURATION
 // ==========================================
-const ADMIN_IDS = [6402927432]; 
+const SUPER_ADMIN_ID = 6402927432; // Aapki Telegram ID
 const PANEL_URL = 'https://smmlite.com/api/v2';
 const SERVICE_ID = '5160';
-const BOT_TOKEN = process.env.BOT_TOKEN; 
-const SMM_API_KEY = process.env.SMM_API_KEY; 
+
+const MASTER_BOT_TOKEN = process.env.BOT_TOKEN; 
 const MONGO_URI = process.env.MONGO_URI; 
-const UPI_ID = process.env.UPI_ID || 'yourupi@ybl'; // Yahan apni UPI ID dalein
+const UPI_ID = process.env.UPI_ID || 'yourupi@ybl'; 
 const PORT = process.env.PORT || 3000;
 
 const WEBHOOK_URL = process.env.RENDER_EXTERNAL_URL 
@@ -24,168 +24,189 @@ const WEBHOOK_URL = process.env.RENDER_EXTERNAL_URL
   : `http://localhost:${PORT}/webhook`;
 
 // ==========================================
-// DATABASE SETUP (Mongoose)
+// DATABASE MODELS (Multi-Bot Architecture)
 // ==========================================
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.log('❌ MongoDB Error:', err.message));
 
-// Channel Model
-const Channel = mongoose.model('Channel', new mongoose.Schema({
-  username: { type: String, required: true, unique: true },
-  quantity: { type: Number, default: 10 }
-}));
-
-// User Model (Premium check ke liye)
+// User Model (Customer Account)
 const User = mongoose.model('User', new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
+  firstName: { type: String },
   isPremium: { type: Boolean, default: false },
-  premiumExpiry: { type: Date, default: null }
+  expiryDate: { type: Date, default: null },
+  // Customer ka apna bot aur API
+  botToken: { type: String, default: null }, 
+  panelApiKey: { type: String, default: null },
+  channels: { type: [String], default: [] }, // Customer ke channels ki list
+  quantity: { type: Number, default: 10 }    // Default qty
 }));
 
 // ==========================================
-// BOT & SERVER SETUP
+// BOT & SERVER SETUP (Dynamic Webhooks)
 // ==========================================
-const isAdmin = (id) => ADMIN_IDS.includes(id);
+// Ek object jisme hum sabhi customer bots ke instances store karenge
+const activeBots = {}; 
 
-const bot = new TelegramBot(BOT_TOKEN, { 
-  polling: false,
-  request: { agentOptions: { family: 4 } } 
-});
+// Master Bot (Aapke control ke liye)
+const adminBot = new TelegramBot(MASTER_BOT_TOKEN, { polling: false });
 
-bot.setWebHook(WEBHOOK_URL)
-  .then(() => console.log('✅ Webhook successfully set!'))
-  .catch((err) => console.log('❌ Webhook error:', err.message));
+adminBot.setWebHook(`${WEBHOOK_URL}/admin`)
+  .then(() => console.log('✅ Admin Webhook set!'))
+  .catch((err) => console.log('❌ Admin Webhook error:', err.message));
 
-app.post('/webhook', (req, res) => {
-  bot.processUpdate(req.body);
+app.post('/webhook/admin', (req, res) => {
+  adminBot.processUpdate(req.body);
   res.sendStatus(200);
 });
 
-app.get('/', (req, res) => res.send('Premium Bot is running!'));
+// Function to initialize a customer's bot
+async function startCustomerBot(user) {
+  if (!user.botToken) return;
 
-// ==========================================
-// SMM PANEL LOGIC
-// ==========================================
-async function placeOrder(link, quantity) {
   try {
-    const { data } = await axios.post(PANEL_URL, { 
-      key: SMM_API_KEY, action: 'add', service: SERVICE_ID, link: link, quantity: quantity 
-    }, { timeout: 8000 });
-    if (data?.error) throw new Error(data.error);
-    if (!data?.order) throw new Error('No order ID received');
-    return { ok: true, orderId: data.order };
-  } catch (err) { 
-    console.log(`❌ Panel Error: ${err.message}`);
-    return { ok: false };
+    const bot = new TelegramBot(user.botToken, { polling: false });
+    const botPath = `/webhook/${user.userId}`;
+    
+    // Set webhook for this specific customer's bot
+    await bot.setWebHook(`${WEBHOOK_URL}${botPath}`);
+    activeBots[user.userId] = bot;
+
+    // Handle messages for customer's bot
+    bot.onText(/^\/start$/, (msg) => {
+      bot.sendMessage(msg.chat.id, `👋 <b>Welcome to your Premium Bot!</b>\n\nUse <code>/setqty 50</code> to change order quantity for all your channels.`, { parse_mode: 'HTML' });
+    });
+
+    // Customer can only change quantity
+    bot.onText(/^\/setqty\s+(\d+)$/, async (msg, match) => {
+      const qty = parseInt(match[1], 10);
+      if (qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid quantity.');
+
+      // Update quantity in DB
+      await User.updateOne({ userId: user.userId }, { quantity: qty });
+      bot.sendMessage(msg.chat.id, `✅ Quantity updated to <b>${qty}</b> for all your channels.`, { parse_mode: 'HTML' });
+    });
+
+    // Handle channel posts for this bot
+    bot.on('channel_post', async (msg) => {
+      const username = msg.chat.username?.toLowerCase();
+      if (!username) return;
+
+      // Check if channel is managed by this user and user is premium
+      const dbUser = await User.findOne({ userId: user.userId });
+      if (!dbUser.isPremium || dbUser.expiryDate < new Date()) {
+        return; // Plan expired, ignore
+      }
+
+      if (!dbUser.channels.includes(username)) return; // Channel not added by admin
+
+      const link = `https://t.me/${username}/${msg.message_id}`;
+      
+      // Place order using CUSTOMER'S API key
+      try {
+        const { data } = await axios.post(PANEL_URL, { 
+          key: dbUser.panelApiKey, action: 'add', service: SERVICE_ID, link: link, quantity: dbUser.quantity 
+        }, { timeout: 8000 });
+
+        if (data?.error) throw new Error(data.error);
+        if (!data?.order) throw new Error('No order ID');
+        
+        console.log(`✅ [User ${user.userId}] Success: ${link}`);
+      } catch (err) {
+        console.log(`❌ [User ${user.userId}] Panel Error: ${err.message}`);
+        bot.sendMessage(user.userId, `❌ Order failed for ${link}`).catch(()=>{});
+      }
+    });
+
+    console.log(`🤖 Customer Bot initialized for User: ${user.userId}`);
+  } catch (err) {
+    console.log(`❌ Failed to start bot for ${user.userId}:`, err.message);
   }
 }
 
-// ==========================================
-// COMMANDS
-// ==========================================
-
-// Start Menu
-const mainMenu = {
-  reply_markup: {
-    inline_keyboard: [
-      [{ text: '📊 Stats', callback_data: 'stats' }, { text: '💰 Balance', callback_data: 'balance' }],
-      [{ text: '🤖 Buy Premium Bot (₹300/week)', callback_data: 'buybot' }],
-    ],
-  },
-  parse_mode: 'HTML',
-};
-
-bot.onText(/^\/start$/, (msg) => {
-  if (!isAdmin(msg.from.id)) return bot.sendMessage(msg.chat.id, '❌ You are not admin.');
-  bot.sendMessage(msg.chat.id, `🤖 <b>Premium SMM Bot</b>\n\nUse these commands:\n/addchannel @username\n/setqty @username 50\n/buybot`, mainMenu);
-});
-
-// 1. ADD CHANNEL
-bot.onText(/^\/addchannel\s+(@\w+)$/, async (msg, match) => {
-  if (!isAdmin(msg.from.id)) return;
-  const channelUsername = match[1].replace('@', '').toLowerCase();
-
-  try {
-    const exists = await Channel.findOne({ username: channelUsername });
-    if (exists) return bot.sendMessage(msg.chat.id, `⚠️ Channel @${channelUsername} already added.`);
-
-    await Channel.create({ username: channelUsername });
-    bot.sendMessage(msg.chat.id, `✅ Channel @${channelUsername} added successfully!\nDefault Qty: 10`);
-  } catch (err) {
-    bot.sendMessage(msg.chat.id, `❌ Database Error: ${err.message}`);
+// Routes for all customer webhooks
+app.post('/webhook/:userId', (req, res) => {
+  const userId = req.params.userId;
+  if (activeBots[userId]) {
+    activeBots[userId].processUpdate(req.body);
   }
+  res.sendStatus(200);
 });
 
-// 2. SET QTY FOR SPECIFIC CHANNEL
-bot.onText(/^\/setqty\s+(@\w+)\s+(\d+)$/, async (msg, match) => {
-  if (!isAdmin(msg.from.id)) return;
-  const channelUsername = match[1].replace('@', '').toLowerCase();
-  const qty = parseInt(match[2], 10);
+app.get('/', (req, res) => res.send('Multi-Bot SaaS is running!'));
 
-  if (qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid quantity.');
+
+// ==========================================
+// SUPER ADMIN COMMANDS (Aapke liye)
+// ==========================================
+
+adminBot.onText(/^\/start$/, (msg) => {
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
+  adminBot.sendMessage(msg.chat.id, `👑 <b>Master Admin Panel</b>\n\n/approve <user_id> <days>\n/addbot <user_id> <token> <apikey> <channel1,channel2>`);
+});
+
+// 1. Approve User for X days
+adminBot.onText(/^\/approve\s+(\d+)\s+(\d+)$/, async (msg, match) => {
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
+  const targetUserId = match[1];
+  const days = parseInt(match[2], 10);
+
+  const expiry = new Date();
+  expiry.setDate(expiry.getDate() + days);
+
+  await User.findOneAndUpdate(
+    { userId: targetUserId },
+    { isPremium: true, expiryDate: expiry },
+    { upsert: true }
+  );
+  adminBot.sendMessage(msg.chat.id, `✅ User ${targetUserId} approved for ${days} days.`);
+});
+
+// 2. Add / Update Customer Bot Details
+adminBot.onText(/^\/addbot\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(.+)$/, async (msg, match) => {
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
+  
+  const targetUserId = match[1];
+  const botToken = match[2];
+  const panelApiKey = match[3];
+  const channelList = match[4].split(',').map(c => c.trim().replace('@', '').toLowerCase());
 
   try {
-    const channel = await Channel.findOneAndUpdate(
-      { username: channelUsername },
-      { quantity: qty },
-      { new: true }
+    // Save to DB
+    const user = await User.findOneAndUpdate(
+      { userId: targetUserId },
+      { 
+        botToken: botToken, 
+        panelApiKey: panelApiKey,
+        channels: channelList 
+      },
+      { new: true, upsert: true }
     );
-    if (!channel) return bot.sendMessage(msg.chat.id, `❌ Channel @${channelUsername} not found. Pehle /addchannel karein.`);
 
-    bot.sendMessage(msg.chat.id, `✅ Quantity for @${channelUsername} set to <b>${qty}</b>`, { parse_mode: 'HTML' });
+    adminBot.sendMessage(msg.chat.id, `✅ Bot details added for User ${targetUserId}.\nChannels: ${channelList.join(', ')}`);
+
+    // Start the bot immediately
+    await startCustomerBot(user);
+
   } catch (err) {
-    bot.sendMessage(msg.chat.id, `❌ Database Error: ${err.message}`);
+    adminBot.sendMessage(msg.chat.id, `❌ Error adding bot: ${err.message}`);
   }
 });
 
-// 3. BUY BOT (Generate UPI QR)
-bot.onText(/^\/buybot$/, async (msg) => {
-  const chatId = msg.chat.id;
-  const amount = 300; // ₹300/week
-  const upiUrl = `upi://pay?pa=${UPI_ID}&pn=PremiumBot&am=${amount}&cu=INR&tn=Bot_Premium_${msg.from.id}`;
-
-  try {
-    // QR Code Generate karein
-    const qrBuffer = await QRCode.toBuffer(upiUrl);
-    
-    bot.sendPhoto(chatId, qrBuffer, {
-      caption: `🤖 <b>Premium Bot Subscription</b>\n\n💵 <b>Amount:</b> ₹${amount} / Week\n\nPay using any UPI App (GPay, PhonePe, Paytm).\n\n<b>After payment, send screenshot to @zetagamer0 for approval.</b>`,
-      parse_mode: 'HTML'
-    });
-  } catch (err) {
-    bot.sendMessage(chatId, `❌ QR Generation Failed: ${err.message}`);
+// ==========================================
+// RECONNECT BOTS ON STARTUP
+// ==========================================
+// Jab Render restart hota hai, toh sabhi active bots ko wapas start karna hota hai
+async function reconnectAllBots() {
+  const usersWithBots = await User.find({ botToken: { $ne: null }, isPremium: true });
+  for (const user of usersWithBots) {
+    await startCustomerBot(user);
   }
-});
+}
 
-// 4. CHANNEL POST (Automatic Order)
-bot.on('channel_post', async (msg) => {
-  const username = msg.chat.username?.toLowerCase();
-  if (!username) return;
-
-  try {
-    // Database mein check karein ki channel allowed hai ya nahi
-    const channelData = await Channel.findOne({ username: username });
-    if (!channelData) return; // Agar channel add nahi hai, toh ignore karein
-
-    const link = `https://t.me/${username}/${msg.message_id}`;
-    const result = await placeOrder(link, channelData.quantity);
-
-    if (result.ok) {
-      console.log(`✅ Success: ${link} | Order ID: ${result.orderId}`);
-      // Yahan aap chahein toh channel mein success message bhej sakte hain
-    } else {
-      console.log(`❌ Failed: ${link}`);
-      for (const id of ADMIN_IDS) {
-        bot.sendMessage(id, `❌ Order failed for ${link}`).catch(() => {});
-      }
-    }
-  } catch (err) {
-    console.log('Channel Post Error:', err.message);
-  }
-});
-
-// Start Server
-app.listen(PORT, () => {
-  console.log(`🚀 Premium Server running on port ${PORT}`);
+app.listen(PORT, async () => {
+  console.log(`🚀 Multi-Bot Server running on port ${PORT}`);
+  // Thodi der wait karke bots ko start karein
+  setTimeout(reconnectAllBots, 3000); 
 });
