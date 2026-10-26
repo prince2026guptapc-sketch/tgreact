@@ -6,7 +6,7 @@ const HARDCODED_API_KEY = process.env.SMM_API_KEY;
 const ADMIN_IDS = [6402927432]; 
 const HARDCODED_API_URL = 'https://smmlite.com/api/v2';
 const HARDCODED_SERVICE_ID = '5160';
-const ALLOWED_CHANNELS = ['damanpr0']; 
+const ALLOWED_CHANNELS = ['damanpr0', 'Tricky_Earner_Is_Live']; 
 
 let currentQty = 10; 
 const isAdmin = (id) => ADMIN_IDS.includes(id);
