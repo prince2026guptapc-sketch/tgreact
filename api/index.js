@@ -35,7 +35,7 @@ async function placeOrder(link, quantity) {
   return { ok: false };
 }
 
-// Menu Setup
+// Menu Setup (Yahan parse_mode HTML kar diya gaya hai)
 const mainMenu = {
   reply_markup: {
     inline_keyboard: [
@@ -44,12 +44,12 @@ const mainMenu = {
       [{ text: '⚙️ Service', callback_data: 'service' }],
     ],
   },
-  parse_mode: 'Markdown',
+  parse_mode: 'HTML',
 };
 
 bot.onText(/^\/start$/, (msg) => {
   if (!isAdmin(msg.from.id)) return bot.sendMessage(msg.chat.id, '❌ Not admin');
-  bot.sendMessage(msg.chat.id, `🤖 *SMM Bot*\n\nTap a button below 👇`, mainMenu);
+  bot.sendMessage(msg.chat.id, `🤖 <b>SMM Bot</b>\n\nTap a button below 👇`, mainMenu);
 });
 
 bot.onText(/^\/setqty\s+(\d+)$/, (msg, match) => {
@@ -57,7 +57,7 @@ bot.onText(/^\/setqty\s+(\d+)$/, (msg, match) => {
   const qty = parseInt(match[1], 10);
   if (isNaN(qty) || qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid quantity.');
   currentQty = qty;
-  bot.sendMessage(msg.chat.id, `✅ Quantity updated to *${currentQty}*`, { parse_mode: 'Markdown' });
+  bot.sendMessage(msg.chat.id, `✅ Quantity updated to <b>${currentQty}</b>`, { parse_mode: 'HTML' });
 });
 
 bot.on('callback_query', async (query) => {
@@ -66,17 +66,27 @@ bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id, msgId = query.message.message_id;
   const back = { inline_keyboard: [[{ text: '⬅️ Back', callback_data: 'refresh' }]] };
 
-  if (query.data === 'stats') return bot.editMessageText(`📊 *Stats*\n\nTotal OK: *${ordersCount}*\nTotal Fail: *${failedCount}*`, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
+  if (query.data === 'stats') return bot.editMessageText(`📊 <b>Stats</b>\n\nTotal OK: <b>${ordersCount}</b>\nTotal Fail: <b>${failedCount}</b>`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: back });
+  
   if (query.data === 'balance') {
     try {
       const { data } = await axios.post(PANELS[0].url, { key: PANELS[0].key, action: 'balance' }, { timeout: 10000 });
-      return bot.editMessageText(`💰 *Balance*\n\n*Smmlite*: ${data.balance} ${data.currency || ''}`, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
-    } catch (e) { return bot.editMessageText(`❌ Error: ${e.message}`, { chat_id: chatId, message_id: msgId, reply_markup: back }); }
+      return bot.editMessageText(`💰 <b>Balance</b>\n\n<b>Smmlite</b>: ${data.balance} ${data.currency || ''}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: back });
+    } catch (e) { 
+      return bot.editMessageText(`❌ Error: ${e.message}`, { chat_id: chatId, message_id: msgId, reply_markup: back }); 
+    }
   }
-  if (query.data === 'channels') return bot.editMessageText(`📡 *Allowed Channels*\n\n` + ALLOWED_CHANNELS.map(c => `@${c}`).join('\n'), { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
-  if (query.data === 'qty') return bot.editMessageText(`🔢 *Quantity*\n\n*${currentQty}*\n\nChange via: \`/setqty 20\``, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
-  if (query.data === 'service') return bot.editMessageText(`⚙️ *Service ID*\n\n*${HARDCODED_SERVICE_ID}*`, { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: back });
-  if (query.data === 'refresh') return bot.editMessageText(`🤖 *SMM Bot*\n\nTap a button below 👇`, { chat_id: chatId, message_id: msgId, ...mainMenu });
+  
+  if (query.data === 'channels') {
+    const channelsText = ALLOWED_CHANNELS.map(c => `@${c}`).join('\n');
+    return bot.editMessageText(`📡 <b>Allowed Channels</b>\n\n${channelsText}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: back });
+  }
+  
+  if (query.data === 'qty') return bot.editMessageText(`🔢 <b>Quantity</b>\n\n<b>${currentQty}</b>\n\nChange via: <code>/setqty 20</code>`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: back });
+  
+  if (query.data === 'service') return bot.editMessageText(`⚙️ <b>Service ID</b>\n\n<b>${HARDCODED_SERVICE_ID}</b>`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: back });
+  
+  if (query.data === 'refresh') return bot.editMessageText(`🤖 <b>SMM Bot</b>\n\nTap a button below 👇`, { chat_id: chatId, message_id: msgId, ...mainMenu });
 });
 
 bot.on('channel_post', async (msg) => {
@@ -90,7 +100,10 @@ bot.on('channel_post', async (msg) => {
   } else {
     failedCount++;
     console.log(`❌ Failed: ${link}`);
-    for (const id of ADMIN_IDS) bot.sendMessage(id, `❌ Order failed for ${link}`).catch(() => {});
+    for (const id of ADMIN_IDS) {
+      // Yahan bhi HTML safe kar diya hai
+      bot.sendMessage(id, `❌ Order failed for <a href="${link}">${link}</a>`, { parse_mode: 'HTML' }).catch(() => {});
+    }
   }
 });
 
