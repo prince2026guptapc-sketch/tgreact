@@ -1,14 +1,25 @@
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 
-const BOT_TOKEN = process.env.BOT_TOKEN; 
-const HARDCODED_API_KEY = process.env.SMM_API_KEY; 
+// ==========================================
+// HARDCODED DETAILS (Saari info yahan hai)
+// ==========================================
 const ADMIN_IDS = [6402927432]; 
-const HARDCODED_API_URL = 'https://smmlite.com/api/v2';
-const HARDCODED_SERVICE_ID = '5160';
+const PANEL_URL = 'https://smmlite.com/api/v2';
+const SERVICE_ID = '5160';
 const ALLOWED_CHANNELS = ['damanpr0', 'Tricky_Earner_Is_Live']; 
 
+// Sirf yeh 2 Vercel Environment Variables se aayenge
+const BOT_TOKEN = process.env.BOT_TOKEN; 
+const SMM_API_KEY = process.env.SMM_API_KEY; 
+
+// ==========================================
+// BOT LOGIC START
+// ==========================================
 let currentQty = 10; 
+let ordersCount = 0;
+let failedCount = 0;
+
 const isAdmin = (id) => ADMIN_IDS.includes(id);
 
 // Bot Initialization
@@ -16,26 +27,7 @@ const bot = new TelegramBot(BOT_TOKEN, {
   request: { agentOptions: { family: 4 } }
 });
 
-const PANELS = [{ name: 'Smmlite', url: HARDCODED_API_URL, key: HARDCODED_API_KEY, service: HARDCODED_SERVICE_ID }];
-let ordersCount = 0;
-let failedCount = 0;
-
-// Place Order Logic
-async function placeOrder(link, quantity) {
-  for (const panel of PANELS) {
-    try {
-      const { data } = await axios.post(panel.url, { key: panel.key, action: 'add', service: panel.service, link, quantity }, { timeout: 20000 });
-      if (data?.error) throw new Error(data.error);
-      if (!data?.order) throw new Error('No order ID');
-      return { ok: true, orderId: data.order };
-    } catch (err) { 
-      console.log(`❌ Panel Error: ${err.message}`);
-    }
-  }
-  return { ok: false };
-}
-
-// Menu Setup (Yahan parse_mode HTML kar diya gaya hai)
+// Menu Setup (HTML format use kiya hai taaki crash na ho)
 const mainMenu = {
   reply_markup: {
     inline_keyboard: [
@@ -46,6 +38,27 @@ const mainMenu = {
   },
   parse_mode: 'HTML',
 };
+
+// Place Order Logic (Timeout fix kiya gaya hai)
+async function placeOrder(link, quantity) {
+  try {
+    const { data } = await axios.post(PANEL_URL, { 
+      key: SMM_API_KEY, 
+      action: 'add', 
+      service: SERVICE_ID, 
+      link: link, 
+      quantity: quantity 
+    }, { timeout: 8000 }); // Timeout 20s se kam karke 8s kiya gaya hai
+    
+    if (data?.error) throw new Error(data.error);
+    if (!data?.order) throw new Error('No order ID received');
+    
+    return { ok: true, orderId: data.order };
+  } catch (err) { 
+    console.log(`❌ Panel Error: ${err.message}`);
+    return { ok: false };
+  }
+}
 
 bot.onText(/^\/start$/, (msg) => {
   if (!isAdmin(msg.from.id)) return bot.sendMessage(msg.chat.id, '❌ Not admin');
@@ -70,7 +83,7 @@ bot.on('callback_query', async (query) => {
   
   if (query.data === 'balance') {
     try {
-      const { data } = await axios.post(PANELS[0].url, { key: PANELS[0].key, action: 'balance' }, { timeout: 10000 });
+      const { data } = await axios.post(PANEL_URL, { key: SMM_API_KEY, action: 'balance' }, { timeout: 8000 });
       return bot.editMessageText(`💰 <b>Balance</b>\n\n<b>Smmlite</b>: ${data.balance} ${data.currency || ''}`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: back });
     } catch (e) { 
       return bot.editMessageText(`❌ Error: ${e.message}`, { chat_id: chatId, message_id: msgId, reply_markup: back }); 
@@ -84,7 +97,7 @@ bot.on('callback_query', async (query) => {
   
   if (query.data === 'qty') return bot.editMessageText(`🔢 <b>Quantity</b>\n\n<b>${currentQty}</b>\n\nChange via: <code>/setqty 20</code>`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: back });
   
-  if (query.data === 'service') return bot.editMessageText(`⚙️ <b>Service ID</b>\n\n<b>${HARDCODED_SERVICE_ID}</b>`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: back });
+  if (query.data === 'service') return bot.editMessageText(`⚙️ <b>Service ID</b>\n\n<b>${SERVICE_ID}</b>`, { chat_id: chatId, message_id: msgId, parse_mode: 'HTML', reply_markup: back });
   
   if (query.data === 'refresh') return bot.editMessageText(`🤖 <b>SMM Bot</b>\n\nTap a button below 👇`, { chat_id: chatId, message_id: msgId, ...mainMenu });
 });
@@ -92,17 +105,19 @@ bot.on('callback_query', async (query) => {
 bot.on('channel_post', async (msg) => {
   const username = msg.chat.username?.toLowerCase();
   if (!username || !ALLOWED_CHANNELS.includes(username)) return;
+  
   const link = `https://t.me/${username}/${msg.message_id}`;
   const result = await placeOrder(link, currentQty);
+  
   if (result.ok) {
     ordersCount++;
-    console.log(`✅ Success: ${link}`);
+    console.log(`✅ Success: ${link} | Order ID: ${result.orderId}`);
   } else {
     failedCount++;
     console.log(`❌ Failed: ${link}`);
     for (const id of ADMIN_IDS) {
-      // Yahan bhi HTML safe kar diya hai
-      bot.sendMessage(id, `❌ Order failed for <a href="${link}">${link}</a>`, { parse_mode: 'HTML' }).catch(() => {});
+      // Error message bhejte waqt parse_mode hataya gaya hai taaki link me special char ho toh crash na ho
+      bot.sendMessage(id, `❌ Order failed for ${link}`).catch(() => {});
     }
   }
 });
