@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "start": "node index.js"
+    "start": "node api/index.js"
   },
   "dependencies": {
-    "node-telegram-bot-api": "^0.66.0",
-    "axios": "^1.7.7"
+    "axios": "^1.7.7",
+    "express": "^4.19.2",
+    "node-telegram-bot-api": "^0.66.0"
   },
   "engines": {
     "node": "24.x"
