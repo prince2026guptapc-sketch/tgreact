@@ -10,15 +10,14 @@ app.use(express.json());
 // ==========================================
 // CONFIGURATION
 // ==========================================
-const SUPER_ADMIN_ID = "6402927432"; // Aapki Master Telegram ID
-const SUPER_ADMIN_USERNAME = "@zetagamer0"; // Aapki Telegram Username (Screenshot bhejne ke liye)
+const SUPER_ADMIN_ID = "6402927432"; 
+const SUPER_ADMIN_USERNAME = "@zetagamer0"; 
 const MASTER_BOT_TOKEN = process.env.BOT_TOKEN; 
 const MASTER_API_KEY = process.env.SMM_API_KEY; 
 
 const PANEL_URL = 'https://smmlite.com/api/v2';
 const SERVICE_ID = '5160';
 const MONGO_URI = process.env.MONGO_URI; 
-const UPI_ID = process.env.UPI_ID || 'yourupi@ybl'; 
 const PORT = process.env.PORT || 3000;
 
 const WEBHOOK_URL = process.env.RENDER_EXTERNAL_URL 
@@ -48,6 +47,35 @@ const AdminChannel = mongoose.model('AdminChannel', new mongoose.Schema({
   quantity: { type: Number, default: 10 }
 }));
 
+const Package = mongoose.model('Package', new mongoose.Schema({
+  name: { type: String, required: true },
+  price: { type: Number, required: true },
+  days: { type: Number, required: true }
+}));
+
+const Setting = mongoose.model('Setting', new mongoose.Schema({
+  key: { type: String, required: true, unique: true },
+  value: { type: String }
+}));
+
+// Initialize default packages and settings if empty
+async function initDatabase() {
+  const packCount = await Package.countDocuments();
+  if (packCount === 0) {
+    await Package.create([
+      { name: '1 Week', price: 300, days: 7 },
+      { name: '1 Month', price: 1000, days: 30 },
+      { name: '6 Months', price: 5000, days: 180 },
+      { name: '1 Year', price: 9000, days: 365 }
+    ]);
+  }
+  await Setting.findOneAndUpdate({ key: 'upi_id' }, { value: 'yourupi@ybl' }, { upsert: true });
+  await Setting.findOneAndUpdate({ key: 'usdt_trc20' }, { value: 'YOUR_TRC20_ADDRESS' }, { upsert: true });
+  await Setting.findOneAndUpdate({ key: 'usdt_bsc' }, { value: 'YOUR_BSC_ADDRESS' }, { upsert: true });
+  await Setting.findOneAndUpdate({ key: 'usdt_tron' }, { value: 'YOUR_TRON_ADDRESS' }, { upsert: true });
+}
+initDatabase();
+
 // ==========================================
 // HELPERS
 // ==========================================
@@ -67,22 +95,16 @@ async function placeOrder(link, quantity, apiKey) {
   }
 }
 
-// Function to send Welcome Menu to users
+// Function to generate Welcome & Plans Menu dynamically
 async function sendWelcomeMenu(chatId, firstName) {
-  const welcomeText = `👋 <b>Hello ${firstName}!</b>\n\nThis is a premium telegram reaction bot. That's provides high quality reaction service. Buy the service packages given below 👇 contact Admin for more information @zetagamer0`;
+  const welcomeText = `👋 <b>Hello ${firstName}!</b>\n\nThis is a premium telegram reaction bot. That's provides high quality reaction service. Buy the service packages given below 👇`;
   
-  const menu = {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '📅 1 Week - ₹300', callback_data: 'buy_300' }],
-        [{ text: '📅 1 Month - ₹999', callback_data: 'buy_1000' }],
-        [{ text: '📅 6 Months - ₹4999', callback_data: 'buy_5000' }],
-        [{ text: '📅 1 Year - ₹8999', callback_data: 'buy_9000' }]
-      ]
-    },
-    parse_mode: 'HTML'
-  };
+  const packages = await Package.find({});
+  const keyboard = packages.map(p => [
+    { text: `📅 ${p.name} - ₹${p.price}`, callback_data: `buy_pkg_${p._id}` }
+  ]);
 
+  const menu = { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'HTML' };
   await adminBot.sendMessage(chatId, welcomeText, menu).catch(() => {});
 }
 
@@ -100,40 +122,70 @@ app.post('/webhook/admin', (req, res) => {
   res.sendStatus(200);
 });
 
-// START COMMAND (Diffrentiates between Admin and Normal User)
-adminBot.onText(/^\/start$/, (msg) => {
+// START COMMAND
+adminBot.onText(/^\/start$/, async (msg) => {
   if (msg.from.id.toString() === SUPER_ADMIN_ID) {
-    // Admin Panel
-    const adminMenu = `👑 <b>Master Admin Panel</b>\n\n<b>Available Commands:</b>\n/addchannel @channel\n/setqty @channel 50\n/approve &lt;user_id&gt; &lt;days&gt;\n/addbot &lt;user_id&gt; &lt;token&gt; &lt;apikey_or_none&gt; &lt;channel1,channel2&gt;`;
+    const adminMenu = `👑 <b>Master Admin Panel</b>\n\n<b>Bot Commands:</b>\n/addchannel @channel\n/setqty @channel 50\n/approve &lt;user_id&gt; &lt;days&gt;\n/addbot &lt;user_id&gt; &lt;token&gt; &lt;apikey_or_none&gt; &lt;channel1,channel2&gt;\n\n<b>Payment & Packages:</b>\n/setupi &lt;upi_id&gt;\n/setusdt &lt;trc20|bsc|tron&gt; &lt;address&gt;\n/addpackage &lt;name&gt; &lt;price&gt; &lt;days&gt;\n/listpackages\n/deletepackage &lt;package_id&gt;`;
     adminBot.sendMessage(msg.chat.id, adminMenu, { parse_mode: 'HTML' });
   } else {
-    // Normal User Welcome
     sendWelcomeMenu(msg.chat.id, msg.from.first_name);
   }
 });
 
-// Handle Buttons (Package Click)
-adminBot.on('callback_query', async (query) => {
-  const data = query.data;
-  const chatId = query.message.chat.id;
-  
-  if (data.startsWith('buy_')) {
-    const amount = data.split('_')[1];
-    const upiUrl = `upi://pay?pa=${UPI_ID}&pn=PremiumBot&am=${amount}&cu=INR&tn=Bot_Premium_${query.from.id}`;
+// ADMIN: SET UPI ID
+adminBot.onText(/^\/setupi\s+(.+)$/, async (msg, match) => {
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
+  const upi = match[1].trim();
+  await Setting.findOneAndUpdate({ key: 'upi_id' }, { value: upi }, { upsert: true });
+  adminBot.sendMessage(msg.chat.id, `✅ UPI ID updated to: ${upi}`);
+});
 
-    try {
-      const qrBuffer = await QRCode.toBuffer(upiUrl);
-      const caption = `✅ <b>Selected Plan: ₹${amount}</b>\n\nScan this QR code and pay ₹${amount} to <b>${UPI_ID}</b>.\n\nAfter payment, send the screenshot to ${SUPER_ADMIN_USERNAME} for activation.`;
-      
-      adminBot.sendPhoto(chatId, qrBuffer, { caption: caption, parse_mode: 'HTML' });
-      adminBot.answerCallbackQuery(query.id, { text: 'QR Generated!' });
-    } catch (err) {
-      adminBot.sendMessage(chatId, `❌ Error generating QR. Please try again.`);
-    }
+// ADMIN: SET USDT ADDRESS
+adminBot.onText(/^\/setusdt\s+(trc20|bsc|tron)\s+(.+)$/, async (msg, match) => {
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
+  const network = match[1].toLowerCase();
+  const address = match[2].trim();
+  await Setting.findOneAndUpdate({ key: `usdt_${network}` }, { value: address }, { upsert: true });
+  adminBot.sendMessage(msg.chat.id, `✅ USDT ${network.toUpperCase()} address updated to:\n<code>${address}</code>`, { parse_mode: 'HTML' });
+});
+
+// ADMIN: ADD PACKAGE
+adminBot.onText(/^\/addpackage\s+(.+)\s+(\d+)\s+(\d+)$/, async (msg, match) => {
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
+  const name = match[1].trim();
+  const price = parseInt(match[2], 10);
+  const days = parseInt(match[3], 10);
+
+  await Package.create({ name, price, days });
+  adminBot.sendMessage(msg.chat.id, `✅ Package Added:\nName: ${name}\nPrice: ₹${price}\nDays: ${days}`);
+});
+
+// ADMIN: LIST PACKAGES
+adminBot.onText(/^\/listpackages$/, async (msg) => {
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
+  const packages = await Package.find({});
+  if (packages.length === 0) return adminBot.sendMessage(msg.chat.id, '❌ No packages found.');
+
+  let text = `📦 <b>Available Packages:</b>\n\n`;
+  packages.forEach(p => {
+    text += `ID: <code>${p._id}</code>\nName: ${p.name}\nPrice: ₹${p.price}\nDays: ${p.days}\n\n`;
+  });
+  adminBot.sendMessage(msg.chat.id, text, { parse_mode: 'HTML' });
+});
+
+// ADMIN: DELETE PACKAGE
+adminBot.onText(/^\/deletepackage\s+(.+)$/, async (msg, match) => {
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
+  const id = match[1].trim();
+  try {
+    await Package.findByIdAndDelete(id);
+    adminBot.sendMessage(msg.chat.id, `✅ Package deleted successfully.`);
+  } catch (err) {
+    adminBot.sendMessage(msg.chat.id, `❌ Invalid Package ID.`);
   }
 });
 
-// Admin Commands (Only for Admin)
+// ADMIN OTHER COMMANDS
 adminBot.onText(/^\/addchannel\s+(@\w+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
   const channel = match[1].replace('@', '').toLowerCase();
@@ -201,6 +253,63 @@ adminBot.on('channel_post', async (msg) => {
 });
 
 // ==========================================
+// USER CALLBACK QUERIES (Package & Payments)
+// ==========================================
+adminBot.on('callback_query', async (query) => {
+  const data = query.data;
+  const chatId = query.message.chat.id;
+  
+  if (data.startsWith('buy_pkg_')) {
+    const pkgId = data.replace('buy_pkg_', '');
+    const pkg = await Package.findById(pkgId);
+    if (!pkg) return adminBot.answerCallbackQuery(query.id, { text: 'Package not found!', show_alert: true });
+    
+    adminBot.answerCallbackQuery(query.id, { text: `Selected ${pkg.name} (₹${pkg.price})` });
+    
+    const payKeyboard = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '💳 Pay via UPI', callback_data: `pay_upi_${pkg._id}` }],
+          [{ text: '🪙 Pay via USDT', callback_data: `pay_usdt_${pkg._id}` }],
+          [{ text: '⬅️ Back', callback_data: 'back_to_menu' }]
+        ]
+      }
+    };
+    adminBot.sendMessage(chatId, `You selected: <b>${pkg.name}</b> (₹${pkg.price})\n\nChoose payment method:`, { parse_mode: 'HTML', ...payKeyboard });
+  }
+
+  if (data.startsWith('pay_upi_')) {
+    const pkgId = data.replace('pay_upi_', '');
+    const pkg = await Package.findById(pkgId);
+    const upiSetting = await Setting.findOne({ key: 'upi_id' });
+    const upiId = upiSetting ? upiSetting.value : 'not_set';
+
+    const upiUrl = `upi://pay?pa=${upiId}&pn=PremiumBot&am=${pkg.price}&cu=INR&tn=Bot_Premium_${query.from.id}`;
+    const qrBuffer = await QRCode.toBuffer(upiUrl);
+    const caption = `✅ <b>Plan: ${pkg.name} (₹${pkg.price})</b>\n\nScan this QR code or pay to UPI ID:\n<code>${upiId}</code>\n\nAfter payment, send the screenshot to ${SUPER_ADMIN_USERNAME} for activation.`;
+
+    adminBot.sendPhoto(chatId, qrBuffer, { caption: caption, parse_mode: 'HTML' });
+  }
+
+  if (data.startsWith('pay_usdt_')) {
+    const pkgId = data.replace('pay_usdt_', '');
+    const pkg = await Package.findById(pkgId);
+    const trc20 = await Setting.findOne({ key: 'usdt_trc20' });
+    const bsc = await Setting.findOne({ key: 'usdt_bsc' });
+    const tron = await Setting.findOne({ key: 'usdt_tron' });
+
+    const text = `✅ <b>Plan: ${pkg.name} (₹${pkg.price})</b>\n\nSend the exact USDT amount to any of these addresses (Network specific):\n\n🔹 <b>TRC20:</b>\n<code>${trc20 ? trc20.value : 'Not Set'}</code>\n\n🔹 <b>BSC (BEP20):</b>\n<code>${bsc ? bsc.value : 'Not Set'}</code>\n\n🔹 <b>TRON:</b>\n<code>${tron ? tron.value : 'Not Set'}</code>\n\n⚠️ <b>WARNING:</b> Send ONLY to the correct network. Wrong network = loss of funds.\n\nAfter payment, send the screenshot to ${SUPER_ADMIN_USERNAME} for activation.`;
+
+    adminBot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+  }
+
+  if (data === 'back_to_menu') {
+    adminBot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+    sendWelcomeMenu(chatId, query.from.first_name);
+  }
+});
+
+// ==========================================
 // 2. CUSTOMER BOTS (Dynamic)
 // ==========================================
 async function startCustomerBot(user) {
@@ -233,10 +342,13 @@ async function startCustomerBot(user) {
       if (query.data.startsWith('buy_')) {
         const amount = query.data.split('_')[1];
         const chatId = query.message.chat.id;
-        const upiUrl = `upi://pay?pa=${UPI_ID}&pn=PremiumBot&am=${amount}&cu=INR&tn=Bot_Premium_${query.from.id}`;
+        const upiSetting = await Setting.findOne({ key: 'upi_id' });
+        const upiId = upiSetting ? upiSetting.value : 'not_set';
+        
+        const upiUrl = `upi://pay?pa=${upiId}&pn=PremiumBot&am=${amount}&cu=INR&tn=Bot_Premium_${query.from.id}`;
         try {
           const qrBuffer = await QRCode.toBuffer(upiUrl);
-          const caption = `✅ <b>Selected Plan: ₹${amount}</b>\n\nScan this QR code and pay ₹${amount} to <b>${UPI_ID}</b>.\n\nAfter payment, send the screenshot to ${SUPER_ADMIN_USERNAME} for activation.`;
+          const caption = `✅ <b>Selected Plan: ₹${amount}</b>\n\nScan this QR code and pay ₹${amount} to <b>${upiId}</b>.\n\nAfter payment, send the screenshot to ${SUPER_ADMIN_USERNAME} for activation.`;
           bot.sendPhoto(chatId, qrBuffer, { caption: caption, parse_mode: 'HTML' });
           bot.answerCallbackQuery(query.id, { text: 'QR Generated!' });
         } catch (err) { bot.sendMessage(chatId, `❌ Error generating QR.`); }
