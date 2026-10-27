@@ -69,7 +69,7 @@ async function placeOrder(link, quantity, apiKey) {
 
 // Function to send Welcome Menu to users
 async function sendWelcomeMenu(chatId, firstName) {
-  const welcomeText = `👋 <b>Hello ${firstName}!</b>\n\nThis is a premium telegram reaction bot. That's provides high quality reaction service. Buy the service packages given below 👇\n\ncontact Admin for more information </b>@zetagamer0`;
+  const welcomeText = `👋 <b>Hello ${firstName}!</b>\n\nThis is a premium telegram reaction bot. That's provides high quality reaction service. Buy the service packages given below 👇 contact Admin for more information @zetagamer0`;
   
   const menu = {
     reply_markup: {
