@@ -2,7 +2,7 @@ const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 const mongoose = require('mongoose');
-const QRCode = require('qrcode'); // Yeh add karna zaroori tha
+const QRCode = require('qrcode');
 
 const app = express();
 app.use(express.json());
@@ -10,7 +10,9 @@ app.use(express.json());
 // ==========================================
 // CONFIGURATION
 // ==========================================
-const SUPER_ADMIN_ID = 6402927432; 
+// MASTER ADMIN ID YAHAN HARDCODE HAI (Aapki ID)
+const SUPER_ADMIN_ID = "6402927432"; 
+
 const MASTER_BOT_TOKEN = process.env.BOT_TOKEN; 
 const MASTER_API_KEY = process.env.SMM_API_KEY; 
 
@@ -80,55 +82,20 @@ app.post('/webhook/admin', (req, res) => {
   res.sendStatus(200);
 });
 
-// Admin Start Menu
-const adminMenu = {
-  reply_markup: {
-    inline_keyboard: [
-      [{ text: '📊 Admin Stats', callback_data: 'admin_stats' }],
-      [{ text: '🤖 Buy Premium Bot (₹300/week)', callback_data: 'admin_buybot' }]
-    ],
-  },
-  parse_mode: 'HTML',
-};
-
+// 1. ADMIN START MENU
 adminBot.onText(/^\/start$/, (msg) => {
-  if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return adminBot.sendMessage(msg.chat.id, '❌ Not admin');
-  adminBot.sendMessage(msg.chat.id, `👑 <b>Master Admin Panel</b>\n\nSelect an option below:`, adminMenu);
-});
-
-// Admin Buy Bot (QR Code)
-adminBot.onText(/^\/buybot$/, async (msg) => {
-  if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
-  const chatId = msg.chat.id;
-  const amount = 300; 
-  const upiUrl = `upi://pay?pa=${UPI_ID}&pn=PremiumBot&am=${amount}&cu=INR&tn=Bot_Premium_${msg.from.id}`;
-
-  try {
-    const qrBuffer = await QRCode.toBuffer(upiUrl);
-    adminBot.sendPhoto(chatId, qrBuffer, {
-      caption: `🤖 <b>Premium Subscription (₹300/Week)</b>\n\nPay using any UPI App, then send screenshot to @YourTelegramUsername. Admin will activate your plan.`,
-      parse_mode: 'HTML'
-    });
-  } catch (err) {
-    adminBot.sendMessage(chatId, `❌ QR Generation Failed.`);
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID) {
+    return adminBot.sendMessage(msg.chat.id, '❌ You are not the Admin. This is a private bot.');
   }
-});
-
-adminBot.on('callback_query', async (query) => {
-  if (query.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
   
-  if (query.data === 'admin_stats') {
-    adminBot.answerCallbackQuery(query.id, { text: 'Stats feature coming soon!', show_alert: true });
-  }
-  if (query.data === 'admin_buybot') {
-    // Simply trigger the buybot command logic
-    adminBot.emit('text', { chat: query.message.chat, from: query.from, text: '/buybot' });
-  }
+  const adminMenu = `👑 <b>Master Admin Panel</b>\n\n<b>Commands:</b>\n/addchannel @channel\n/setqty @channel 50\n/approve &lt;user_id&gt; &lt;days&gt;\n/addbot &lt;user_id&gt; &lt;token&gt; &lt;apikey_or_none&gt; &lt;channel1,channel2&gt;\n/buybot`;
+  
+  adminBot.sendMessage(msg.chat.id, adminMenu, { parse_mode: 'HTML' });
 });
 
-// Admin Add Channel
+// 2. ADMIN ADD CHANNEL
 adminBot.onText(/^\/addchannel\s+(@\w+)$/, async (msg, match) => {
-  if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
   const channel = match[1].replace('@', '').toLowerCase();
   try {
     await AdminChannel.findOneAndUpdate({ username: channel }, {}, { upsert: true });
@@ -136,21 +103,21 @@ adminBot.onText(/^\/addchannel\s+(@\w+)$/, async (msg, match) => {
   } catch (err) { adminBot.sendMessage(msg.chat.id, `❌ Error: ${err.message}`); }
 });
 
-// Admin Set Quantity
+// 3. ADMIN SET QTY
 adminBot.onText(/^\/setqty\s+(@\w+)\s+(\d+)$/, async (msg, match) => {
-  if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
   const channel = match[1].replace('@', '').toLowerCase();
   const qty = parseInt(match[2], 10);
   try {
     const c = await AdminChannel.findOneAndUpdate({ username: channel }, { quantity: qty }, { new: true });
-    if (!c) return adminBot.sendMessage(msg.chat.id, `❌ Channel not found. Add it first.`);
+    if (!c) return adminBot.sendMessage(msg.chat.id, `❌ Channel not found. Add it first using /addchannel.`);
     adminBot.sendMessage(msg.chat.id, `✅ Admin Qty for @${channel} set to ${qty}`);
   } catch (err) { adminBot.sendMessage(msg.chat.id, `❌ Error.`); }
 });
 
-// Admin Approve User (Premium)
+// 4. ADMIN APPROVE USER (Premium)
 adminBot.onText(/^\/approve\s+(\d+)\s+(\d+)$/, async (msg, match) => {
-  if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
   const targetUserId = match[1];
   const days = parseInt(match[2], 10);
   const expiry = new Date();
@@ -160,9 +127,9 @@ adminBot.onText(/^\/approve\s+(\d+)\s+(\d+)$/, async (msg, match) => {
   adminBot.sendMessage(msg.chat.id, `✅ User ${targetUserId} approved for ${days} days.`);
 });
 
-// Admin Add Customer Bot
+// 5. ADMIN ADD CUSTOMER BOT
 adminBot.onText(/^\/addbot\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(.+)$/, async (msg, match) => {
-  if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
   const targetUserId = match[1];
   const botToken = match[2];
   let apiKey = match[3].trim();
@@ -183,7 +150,25 @@ adminBot.onText(/^\/addbot\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(.+)$/, async (msg, m
   }
 });
 
-// Admin Channels Order
+// 6. ADMIN BUY BOT (QR Code)
+adminBot.onText(/^\/buybot$/, async (msg) => {
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
+  const chatId = msg.chat.id;
+  const amount = 300; 
+  const upiUrl = `upi://pay?pa=${UPI_ID}&pn=PremiumBot&am=${amount}&cu=INR&tn=Bot_Premium_Admin`;
+
+  try {
+    const qrBuffer = await QRCode.toBuffer(upiUrl);
+    adminBot.sendPhoto(chatId, qrBuffer, {
+      caption: `🤖 <b>Premium Subscription (₹300/Week)</b>\n\nPay using any UPI App, then send screenshot to Admin.`,
+      parse_mode: 'HTML'
+    });
+  } catch (err) {
+    adminBot.sendMessage(chatId, `❌ QR Generation Failed.`);
+  }
+});
+
+// 7. ADMIN CHANNEL POST LISTENER
 adminBot.on('channel_post', async (msg) => {
   const username = msg.chat.username?.toLowerCase();
   if (!username) return;
@@ -194,6 +179,7 @@ adminBot.on('channel_post', async (msg) => {
   const result = await placeOrder(link, adminChannel.quantity, MASTER_API_KEY);
   if (result.ok) console.log(`✅ [Admin] Success: ${link}`);
 });
+
 
 // ==========================================
 // 2. CUSTOMER BOTS (Dynamic)
@@ -206,19 +192,13 @@ async function startCustomerBot(user) {
     await bot.setWebHook(`${WEBHOOK_URL}${botPath}`);
     activeBots[user.userId] = bot;
 
-    const customerMenu = {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '🤖 Buy Premium (₹300/week)', callback_data: 'cust_buybot' }]
-        ],
-      },
-      parse_mode: 'HTML',
-    };
-
+    // CUSTOMER START MENU
     bot.onText(/^\/start$/, (msg) => {
-      bot.sendMessage(msg.chat.id, `👋 <b>Welcome to Premium Bot!</b>\n\nUse <code>/setqty 50</code> to change order quantity.\nOr purchase a plan.`, customerMenu);
+      const customerMenu = `👋 <b>Welcome to Premium Bot!</b>\n\nUse <code>/setqty 50</code> to change order quantity.\nOr purchase a plan.`;
+      bot.sendMessage(msg.chat.id, customerMenu, { parse_mode: 'HTML' });
     });
 
+    // CUSTOMER SET QTY
     bot.onText(/^\/setqty\s+(\d+)$/, async (msg, match) => {
       const qty = parseInt(match[1], 10);
       if (qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid quantity.');
@@ -226,6 +206,7 @@ async function startCustomerBot(user) {
       bot.sendMessage(msg.chat.id, `✅ Quantity updated to <b>${qty}</b> for all your channels.`, { parse_mode: 'HTML' });
     });
 
+    // CUSTOMER BUY BOT
     bot.onText(/^\/buybot$/, async (msg) => {
       const chatId = msg.chat.id;
       const amount = 300; 
@@ -239,12 +220,7 @@ async function startCustomerBot(user) {
       } catch (err) { bot.sendMessage(chatId, `❌ QR Generation Failed.`); }
     });
 
-    bot.on('callback_query', (query) => {
-      if (query.data === 'cust_buybot') {
-         bot.emit('text', { chat: query.message.chat, from: query.from, text: '/buybot' });
-      }
-    });
-
+    // CUSTOMER CHANNEL POST LISTENER
     bot.on('channel_post', async (msg) => {
       const username = msg.chat.username?.toLowerCase();
       if (!username) return;
