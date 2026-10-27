@@ -75,9 +75,9 @@ async function sendWelcomeMenu(chatId, firstName) {
     reply_markup: {
       inline_keyboard: [
         [{ text: '📅 1 Week - ₹300', callback_data: 'buy_300' }],
-        [{ text: '📅 1 Month - ₹1000', callback_data: 'buy_1000' }],
-        [{ text: '📅 6 Months - ₹5000', callback_data: 'buy_5000' }],
-        [{ text: '📅 1 Year - ₹9000', callback_data: 'buy_9000' }]
+        [{ text: '📅 1 Month - ₹999', callback_data: 'buy_1000' }],
+        [{ text: '📅 6 Months - ₹4999', callback_data: 'buy_5000' }],
+        [{ text: '📅 1 Year - ₹8999', callback_data: 'buy_9000' }]
       ]
     },
     parse_mode: 'HTML'
