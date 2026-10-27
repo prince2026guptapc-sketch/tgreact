@@ -2,6 +2,7 @@ const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 const mongoose = require('mongoose');
+const QRCode = require('qrcode'); // Yeh add karna zaroori tha
 
 const app = express();
 app.use(express.json());
@@ -16,6 +17,7 @@ const MASTER_API_KEY = process.env.SMM_API_KEY;
 const PANEL_URL = 'https://smmlite.com/api/v2';
 const SERVICE_ID = '5160';
 const MONGO_URI = process.env.MONGO_URI; 
+const UPI_ID = process.env.UPI_ID || 'yourupi@ybl'; 
 const PORT = process.env.PORT || 3000;
 
 const WEBHOOK_URL = process.env.RENDER_EXTERNAL_URL 
@@ -46,7 +48,7 @@ const AdminChannel = mongoose.model('AdminChannel', new mongoose.Schema({
 }));
 
 // ==========================================
-// BOT SETUP
+// BOT SETUP & HELPERS
 // ==========================================
 const activeBots = {}; 
 
@@ -65,7 +67,7 @@ async function placeOrder(link, quantity, apiKey) {
 }
 
 // ==========================================
-// 1. MASTER BOT (Admin Bot)
+// 1. MASTER BOT (Admin Bot) - FULL FEATURES
 // ==========================================
 const adminBot = new TelegramBot(MASTER_BOT_TOKEN, { polling: false });
 
@@ -78,12 +80,53 @@ app.post('/webhook/admin', (req, res) => {
   res.sendStatus(200);
 });
 
-// Admin Menu (Fixed HTML)
+// Admin Start Menu
+const adminMenu = {
+  reply_markup: {
+    inline_keyboard: [
+      [{ text: '📊 Admin Stats', callback_data: 'admin_stats' }],
+      [{ text: '🤖 Buy Premium Bot (₹300/week)', callback_data: 'admin_buybot' }]
+    ],
+  },
+  parse_mode: 'HTML',
+};
+
 adminBot.onText(/^\/start$/, (msg) => {
-  if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
-  adminBot.sendMessage(msg.chat.id, `👑 <b>Master Admin Panel</b>\n\n<b>Commands:</b>\n/addchannel @channel\n/setqty @channel 50\n/approve &lt;user_id&gt; &lt;days&gt;\n/addbot &lt;user_id&gt; &lt;token&gt; &lt;apikey_or_none&gt; &lt;channel1,channel2&gt;`, { parse_mode: 'HTML' });
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return adminBot.sendMessage(msg.chat.id, '❌ Not admin');
+  adminBot.sendMessage(msg.chat.id, `👑 <b>Master Admin Panel</b>\n\nSelect an option below:`, adminMenu);
 });
 
+// Admin Buy Bot (QR Code)
+adminBot.onText(/^\/buybot$/, async (msg) => {
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
+  const chatId = msg.chat.id;
+  const amount = 300; 
+  const upiUrl = `upi://pay?pa=${UPI_ID}&pn=PremiumBot&am=${amount}&cu=INR&tn=Bot_Premium_${msg.from.id}`;
+
+  try {
+    const qrBuffer = await QRCode.toBuffer(upiUrl);
+    adminBot.sendPhoto(chatId, qrBuffer, {
+      caption: `🤖 <b>Premium Subscription (₹300/Week)</b>\n\nPay using any UPI App, then send screenshot to @YourTelegramUsername. Admin will activate your plan.`,
+      parse_mode: 'HTML'
+    });
+  } catch (err) {
+    adminBot.sendMessage(chatId, `❌ QR Generation Failed.`);
+  }
+});
+
+adminBot.on('callback_query', async (query) => {
+  if (query.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
+  
+  if (query.data === 'admin_stats') {
+    adminBot.answerCallbackQuery(query.id, { text: 'Stats feature coming soon!', show_alert: true });
+  }
+  if (query.data === 'admin_buybot') {
+    // Simply trigger the buybot command logic
+    adminBot.emit('text', { chat: query.message.chat, from: query.from, text: '/buybot' });
+  }
+});
+
+// Admin Add Channel
 adminBot.onText(/^\/addchannel\s+(@\w+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
   const channel = match[1].replace('@', '').toLowerCase();
@@ -93,6 +136,7 @@ adminBot.onText(/^\/addchannel\s+(@\w+)$/, async (msg, match) => {
   } catch (err) { adminBot.sendMessage(msg.chat.id, `❌ Error: ${err.message}`); }
 });
 
+// Admin Set Quantity
 adminBot.onText(/^\/setqty\s+(@\w+)\s+(\d+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
   const channel = match[1].replace('@', '').toLowerCase();
@@ -104,29 +148,27 @@ adminBot.onText(/^\/setqty\s+(@\w+)\s+(\d+)$/, async (msg, match) => {
   } catch (err) { adminBot.sendMessage(msg.chat.id, `❌ Error.`); }
 });
 
+// Admin Approve User (Premium)
 adminBot.onText(/^\/approve\s+(\d+)\s+(\d+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
   const targetUserId = match[1];
   const days = parseInt(match[2], 10);
   const expiry = new Date();
   expiry.setDate(expiry.getDate() + days);
+  
   await User.findOneAndUpdate({ userId: targetUserId }, { isPremium: true, expiryDate: expiry }, { upsert: true });
   adminBot.sendMessage(msg.chat.id, `✅ User ${targetUserId} approved for ${days} days.`);
 });
 
-// ADD BOT LOGIC
+// Admin Add Customer Bot
 adminBot.onText(/^\/addbot\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(.+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID.toString()) return;
-  
   const targetUserId = match[1];
   const botToken = match[2];
   let apiKey = match[3].trim();
   const channels = match[4].split(',').map(c => c.trim().replace('@', '').toLowerCase());
 
-  // Agar aapne 'none' likha hai toh null set karein (Master API use hoga)
-  if (apiKey.toLowerCase() === 'none') {
-    apiKey = null;
-  }
+  if (apiKey.toLowerCase() === 'none') apiKey = null;
 
   try {
     const user = await User.findOneAndUpdate(
@@ -134,17 +176,17 @@ adminBot.onText(/^\/addbot\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(.+)$/, async (msg, m
       { botToken: botToken, panelApiKey: apiKey, channels: channels },
       { new: true, upsert: true }
     );
-    adminBot.sendMessage(msg.chat.id, `✅ Customer Bot added for User ${targetUserId}.\nChannels: ${channels.join(', ')}`);
+    adminBot.sendMessage(msg.chat.id, `✅ Customer Bot added for User ${targetUserId}.`);
     await startCustomerBot(user); 
   } catch (err) {
     adminBot.sendMessage(msg.chat.id, `❌ Error: ${err.message}`);
   }
 });
 
+// Admin Channels Order
 adminBot.on('channel_post', async (msg) => {
   const username = msg.chat.username?.toLowerCase();
   if (!username) return;
-
   const adminChannel = await AdminChannel.findOne({ username });
   if (!adminChannel) return;
 
@@ -164,8 +206,17 @@ async function startCustomerBot(user) {
     await bot.setWebHook(`${WEBHOOK_URL}${botPath}`);
     activeBots[user.userId] = bot;
 
+    const customerMenu = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🤖 Buy Premium (₹300/week)', callback_data: 'cust_buybot' }]
+        ],
+      },
+      parse_mode: 'HTML',
+    };
+
     bot.onText(/^\/start$/, (msg) => {
-      bot.sendMessage(msg.chat.id, `👋 <b>Welcome!</b>\nUse <code>/setqty 50</code> to change order quantity.`, { parse_mode: 'HTML' });
+      bot.sendMessage(msg.chat.id, `👋 <b>Welcome to Premium Bot!</b>\n\nUse <code>/setqty 50</code> to change order quantity.\nOr purchase a plan.`, customerMenu);
     });
 
     bot.onText(/^\/setqty\s+(\d+)$/, async (msg, match) => {
@@ -173,6 +224,25 @@ async function startCustomerBot(user) {
       if (qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid quantity.');
       await User.updateOne({ userId: user.userId }, { quantity: qty });
       bot.sendMessage(msg.chat.id, `✅ Quantity updated to <b>${qty}</b> for all your channels.`, { parse_mode: 'HTML' });
+    });
+
+    bot.onText(/^\/buybot$/, async (msg) => {
+      const chatId = msg.chat.id;
+      const amount = 300; 
+      const upiUrl = `upi://pay?pa=${UPI_ID}&pn=PremiumBot&am=${amount}&cu=INR&tn=Bot_Premium_${msg.from.id}`;
+      try {
+        const qrBuffer = await QRCode.toBuffer(upiUrl);
+        bot.sendPhoto(chatId, qrBuffer, {
+          caption: `🤖 <b>Premium Subscription (₹300/Week)</b>\n\nPay using any UPI App, then send screenshot to admin for approval.`,
+          parse_mode: 'HTML'
+        });
+      } catch (err) { bot.sendMessage(chatId, `❌ QR Generation Failed.`); }
+    });
+
+    bot.on('callback_query', (query) => {
+      if (query.data === 'cust_buybot') {
+         bot.emit('text', { chat: query.message.chat, from: query.from, text: '/buybot' });
+      }
     });
 
     bot.on('channel_post', async (msg) => {
