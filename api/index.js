@@ -10,7 +10,7 @@ app.use(express.json());
 // ==========================================
 // CONFIGURATION
 // ==========================================
-const SUPER_ADMIN_ID = "6402927432"; // Apni Telegram ID yahan dalein
+const SUPER_ADMIN_ID = "6402927432"; // Aapki Master Telegram ID
 const MASTER_BOT_TOKEN = process.env.BOT_TOKEN; 
 const MASTER_API_KEY = process.env.SMM_API_KEY; 
 
@@ -31,6 +31,7 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.log('❌ MongoDB Error:', err.message));
 
+// Customer Data Model
 const User = mongoose.model('User', new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
   firstName: { type: String },
@@ -42,6 +43,7 @@ const User = mongoose.model('User', new mongoose.Schema({
   quantity: { type: Number, default: 10 }
 }));
 
+// Master Admin Data Model
 const AdminChannel = mongoose.model('AdminChannel', new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   quantity: { type: Number, default: 10 }
@@ -67,7 +69,7 @@ async function placeOrder(link, quantity, apiKey) {
 }
 
 // ==========================================
-// 1. MASTER BOT (Admin) - STRICT IDENTITY
+// 1. MASTER BOT (Admin Bot)
 // ==========================================
 const adminBot = new TelegramBot(MASTER_BOT_TOKEN, { polling: false });
 
@@ -80,18 +82,17 @@ app.post('/webhook/admin', (req, res) => {
   res.sendStatus(200);
 });
 
-// Master Bot Start (ONLY FOR ADMIN ID)
+// Admin Start Menu
 adminBot.onText(/^\/start$/, (msg) => {
-  // Strict Check: Agar ID match nahi karti, toh ignore kar do.
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) {
-    return adminBot.sendMessage(msg.chat.id, '❌ You are not authorized to use this master bot.');
+    return adminBot.sendMessage(msg.chat.id, '❌ You are not authorized to use this Master Bot.');
   }
   
-  const adminMenu = `👑 <b>Master Admin Panel</b>\n\n<b>Commands:</b>\n/addchannel @channel\n/setqty @channel 50\n/approve &lt;user_id&gt; &lt;days&gt;\n/addbot &lt;user_id&gt; &lt;token&gt; &lt;apikey_or_none&gt; &lt;channel1,channel2&gt;\n/buybot`;
+  const adminMenu = `👑 <b>Master Admin Panel</b>\n\n<b>Available Commands:</b>\n/addchannel @channel\n/setqty @channel 50\n/approve &lt;user_id&gt; &lt;days&gt;\n/addbot &lt;user_id&gt; &lt;token&gt; &lt;apikey_or_none&gt; &lt;channel1,channel2&gt;\n/buybot`;
   adminBot.sendMessage(msg.chat.id, adminMenu, { parse_mode: 'HTML' });
 });
 
-// Admin Commands (Sabhi commands mein strict ID check)
+// Admin Add Channel
 adminBot.onText(/^\/addchannel\s+(@\w+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
   const channel = match[1].replace('@', '').toLowerCase();
@@ -101,6 +102,7 @@ adminBot.onText(/^\/addchannel\s+(@\w+)$/, async (msg, match) => {
   } catch (err) { adminBot.sendMessage(msg.chat.id, `❌ Error: ${err.message}`); }
 });
 
+// Admin Set Qty for his channels
 adminBot.onText(/^\/setqty\s+(@\w+)\s+(\d+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
   const channel = match[1].replace('@', '').toLowerCase();
@@ -112,24 +114,34 @@ adminBot.onText(/^\/setqty\s+(@\w+)\s+(\d+)$/, async (msg, match) => {
   } catch (err) { adminBot.sendMessage(msg.chat.id, `❌ Error.`); }
 });
 
+// Admin Approve Customer (Premium)
 adminBot.onText(/^\/approve\s+(\d+)\s+(\d+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
   const targetUserId = match[1];
   const days = parseInt(match[2], 10);
   const expiry = new Date();
   expiry.setDate(expiry.getDate() + days);
+  
   await User.findOneAndUpdate({ userId: targetUserId }, { isPremium: true, expiryDate: expiry }, { upsert: true });
   adminBot.sendMessage(msg.chat.id, `✅ User ${targetUserId} approved for ${days} days.`);
+  adminBot.sendMessage(targetUserId, `🎉 Your Premium plan is active for ${days} days!`).catch(()=>{});
 });
 
+// Admin Add Customer Bot
 adminBot.onText(/^\/addbot\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(.+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
+  
   const targetUserId = match[1];
   const botToken = match[2];
   let apiKey = match[3].trim();
   const channels = match[4].split(',').map(c => c.trim().replace('@', '').toLowerCase());
 
   if (apiKey.toLowerCase() === 'none') apiKey = null;
+
+  // Prevent adding own admin ID as customer
+  if (targetUserId === SUPER_ADMIN_ID) {
+    return adminBot.sendMessage(msg.chat.id, `❌ You cannot add yourself as a customer.`);
+  }
 
   try {
     const user = await User.findOneAndUpdate(
@@ -144,6 +156,7 @@ adminBot.onText(/^\/addbot\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(.+)$/, async (msg, m
   }
 });
 
+// Admin Buy Bot QR
 adminBot.onText(/^\/buybot$/, async (msg) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
   const chatId = msg.chat.id;
@@ -158,6 +171,7 @@ adminBot.onText(/^\/buybot$/, async (msg) => {
   } catch (err) { adminBot.sendMessage(chatId, `❌ QR Generation Failed.`); }
 });
 
+// Admin Channel Post Listener
 adminBot.on('channel_post', async (msg) => {
   const username = msg.chat.username?.toLowerCase();
   if (!username) return;
@@ -165,27 +179,36 @@ adminBot.on('channel_post', async (msg) => {
   if (!adminChannel) return;
 
   const link = `https://t.me/${username}/${msg.message_id}`;
-  await placeOrder(link, adminChannel.quantity, MASTER_API_KEY);
+  const result = await placeOrder(link, adminChannel.quantity, MASTER_API_KEY);
+  if (result.ok) console.log(`✅ [Admin] Success: ${link}`);
 });
 
 
 // ==========================================
-// 2. CUSTOMER BOTS (Dynamic Webhooks)
+// 2. CUSTOMER BOTS (Dynamic)
 // ==========================================
 async function startCustomerBot(user) {
   if (!user.botToken) return;
+  
+  // 🛑 SAFETY CHECK: Prevents Admin ID from running as customer
+  if (user.userId.toString() === SUPER_ADMIN_ID) {
+    console.log(`⚠️ Ignored: Admin ID (${user.userId}) is registered as a customer in DB.`);
+    return; 
+  }
+
   try {
     const bot = new TelegramBot(user.botToken, { polling: false });
     const botPath = `/webhook/${user.userId}`;
     await bot.setWebHook(`${WEBHOOK_URL}${botPath}`);
     activeBots[user.userId] = bot;
 
-    // Customer Start Menu (Yeh sirf unke bot par chalega)
+    // Customer Start Menu
     bot.onText(/^\/start$/, (msg) => {
-      const customerMenu = `👋 <b>Welcome!</b>\n\nUse <code>/setqty 50</code> to change order quantity.\n/buybot to purchase premium.`;
+      const customerMenu = `👋 <b>Welcome to Premium Bot!</b>\n\nUse <code>/setqty 50</code> to change order quantity.\n/buybot to purchase premium.`;
       bot.sendMessage(msg.chat.id, customerMenu, { parse_mode: 'HTML' });
     });
 
+    // Customer Set Qty
     bot.onText(/^\/setqty\s+(\d+)$/, async (msg, match) => {
       const qty = parseInt(match[1], 10);
       if (qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid quantity.');
@@ -193,6 +216,7 @@ async function startCustomerBot(user) {
       bot.sendMessage(msg.chat.id, `✅ Quantity updated to <b>${qty}</b>`, { parse_mode: 'HTML' });
     });
 
+    // Customer Buy Bot QR
     bot.onText(/^\/buybot$/, async (msg) => {
       const chatId = msg.chat.id;
       const upiUrl = `upi://pay?pa=${UPI_ID}&pn=PremiumBot&am=300&cu=INR&tn=Bot_Premium_${msg.from.id}`;
@@ -205,6 +229,7 @@ async function startCustomerBot(user) {
       } catch (err) { bot.sendMessage(chatId, `❌ QR Generation Failed.`); }
     });
 
+    // Customer Channel Post Listener
     bot.on('channel_post', async (msg) => {
       const username = msg.chat.username?.toLowerCase();
       if (!username) return;
@@ -235,10 +260,10 @@ app.post('/webhook/:userId', (req, res) => {
   res.sendStatus(200);
 });
 
-app.get('/', (req, res) => res.send('Hybrid Bot is running!'));
+app.get('/', (req, res) => res.send('Hybrid Multi-Bot is running!'));
 
 // ==========================================
-// RECONNECT ALL ACTIVE BOTS ON START
+// RECONNECT BOTS ON STARTUP
 // ==========================================
 async function reconnectAllBots() {
   const usersWithBots = await User.find({ botToken: { $ne: null }, isPremium: true });
