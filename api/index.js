@@ -11,6 +11,7 @@ app.use(express.json());
 // CONFIGURATION
 // ==========================================
 const SUPER_ADMIN_ID = "6402927432"; // Aapki Master Telegram ID
+const SUPER_ADMIN_USERNAME = "@zetagamer0"; // Aapki Telegram Username (Screenshot bhejne ke liye)
 const MASTER_BOT_TOKEN = process.env.BOT_TOKEN; 
 const MASTER_API_KEY = process.env.SMM_API_KEY; 
 
@@ -31,7 +32,6 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.log('❌ MongoDB Error:', err.message));
 
-// Customer Data Model
 const User = mongoose.model('User', new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
   firstName: { type: String },
@@ -43,7 +43,6 @@ const User = mongoose.model('User', new mongoose.Schema({
   quantity: { type: Number, default: 10 }
 }));
 
-// Master Admin Data Model
 const AdminChannel = mongoose.model('AdminChannel', new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   quantity: { type: Number, default: 10 }
@@ -68,8 +67,27 @@ async function placeOrder(link, quantity, apiKey) {
   }
 }
 
+// Function to send Welcome Menu to users
+async function sendWelcomeMenu(chatId, firstName) {
+  const welcomeText = `👋 <b>Hello ${firstName}!</b>\n\nThis is a premium telegram reaction bot. That's provides high quality reaction service. Buy the service packages given below 👇`;
+  
+  const menu = {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '📅 1 Week - ₹300', callback_data: 'buy_300' }],
+        [{ text: '📅 1 Month - ₹1000', callback_data: 'buy_1000' }],
+        [{ text: '📅 6 Months - ₹5000', callback_data: 'buy_5000' }],
+        [{ text: '📅 1 Year - ₹9000', callback_data: 'buy_9000' }]
+      ]
+    },
+    parse_mode: 'HTML'
+  };
+
+  await adminBot.sendMessage(chatId, welcomeText, menu).catch(() => {});
+}
+
 // ==========================================
-// 1. MASTER BOT (Admin Bot)
+// 1. MASTER BOT (Admin Bot & User Bot)
 // ==========================================
 const adminBot = new TelegramBot(MASTER_BOT_TOKEN, { polling: false });
 
@@ -82,17 +100,40 @@ app.post('/webhook/admin', (req, res) => {
   res.sendStatus(200);
 });
 
-// Admin Start Menu
+// START COMMAND (Diffrentiates between Admin and Normal User)
 adminBot.onText(/^\/start$/, (msg) => {
-  if (msg.from.id.toString() !== SUPER_ADMIN_ID) {
-    return adminBot.sendMessage(msg.chat.id, '❌ You are not authorized to use this Master Bot.');
+  if (msg.from.id.toString() === SUPER_ADMIN_ID) {
+    // Admin Panel
+    const adminMenu = `👑 <b>Master Admin Panel</b>\n\n<b>Available Commands:</b>\n/addchannel @channel\n/setqty @channel 50\n/approve &lt;user_id&gt; &lt;days&gt;\n/addbot &lt;user_id&gt; &lt;token&gt; &lt;apikey_or_none&gt; &lt;channel1,channel2&gt;`;
+    adminBot.sendMessage(msg.chat.id, adminMenu, { parse_mode: 'HTML' });
+  } else {
+    // Normal User Welcome
+    sendWelcomeMenu(msg.chat.id, msg.from.first_name);
   }
-  
-  const adminMenu = `👑 <b>Master Admin Panel</b>\n\n<b>Available Commands:</b>\n/addchannel @channel\n/setqty @channel 50\n/approve &lt;user_id&gt; &lt;days&gt;\n/addbot &lt;user_id&gt; &lt;token&gt; &lt;apikey_or_none&gt; &lt;channel1,channel2&gt;\n/buybot`;
-  adminBot.sendMessage(msg.chat.id, adminMenu, { parse_mode: 'HTML' });
 });
 
-// Admin Add Channel
+// Handle Buttons (Package Click)
+adminBot.on('callback_query', async (query) => {
+  const data = query.data;
+  const chatId = query.message.chat.id;
+  
+  if (data.startsWith('buy_')) {
+    const amount = data.split('_')[1];
+    const upiUrl = `upi://pay?pa=${UPI_ID}&pn=PremiumBot&am=${amount}&cu=INR&tn=Bot_Premium_${query.from.id}`;
+
+    try {
+      const qrBuffer = await QRCode.toBuffer(upiUrl);
+      const caption = `✅ <b>Selected Plan: ₹${amount}</b>\n\nScan this QR code and pay ₹${amount} to <b>${UPI_ID}</b>.\n\nAfter payment, send the screenshot to ${SUPER_ADMIN_USERNAME} for activation.`;
+      
+      adminBot.sendPhoto(chatId, qrBuffer, { caption: caption, parse_mode: 'HTML' });
+      adminBot.answerCallbackQuery(query.id, { text: 'QR Generated!' });
+    } catch (err) {
+      adminBot.sendMessage(chatId, `❌ Error generating QR. Please try again.`);
+    }
+  }
+});
+
+// Admin Commands (Only for Admin)
 adminBot.onText(/^\/addchannel\s+(@\w+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
   const channel = match[1].replace('@', '').toLowerCase();
@@ -102,7 +143,6 @@ adminBot.onText(/^\/addchannel\s+(@\w+)$/, async (msg, match) => {
   } catch (err) { adminBot.sendMessage(msg.chat.id, `❌ Error: ${err.message}`); }
 });
 
-// Admin Set Qty for his channels
 adminBot.onText(/^\/setqty\s+(@\w+)\s+(\d+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
   const channel = match[1].replace('@', '').toLowerCase();
@@ -114,7 +154,6 @@ adminBot.onText(/^\/setqty\s+(@\w+)\s+(\d+)$/, async (msg, match) => {
   } catch (err) { adminBot.sendMessage(msg.chat.id, `❌ Error.`); }
 });
 
-// Admin Approve Customer (Premium)
 adminBot.onText(/^\/approve\s+(\d+)\s+(\d+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
   const targetUserId = match[1];
@@ -127,21 +166,15 @@ adminBot.onText(/^\/approve\s+(\d+)\s+(\d+)$/, async (msg, match) => {
   adminBot.sendMessage(targetUserId, `🎉 Your Premium plan is active for ${days} days!`).catch(()=>{});
 });
 
-// Admin Add Customer Bot
 adminBot.onText(/^\/addbot\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(.+)$/, async (msg, match) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
-  
   const targetUserId = match[1];
   const botToken = match[2];
   let apiKey = match[3].trim();
   const channels = match[4].split(',').map(c => c.trim().replace('@', '').toLowerCase());
 
   if (apiKey.toLowerCase() === 'none') apiKey = null;
-
-  // Prevent adding own admin ID as customer
-  if (targetUserId === SUPER_ADMIN_ID) {
-    return adminBot.sendMessage(msg.chat.id, `❌ You cannot add yourself as a customer.`);
-  }
+  if (targetUserId === SUPER_ADMIN_ID) return adminBot.sendMessage(msg.chat.id, `❌ You cannot add yourself as a customer.`);
 
   try {
     const user = await User.findOneAndUpdate(
@@ -156,22 +189,6 @@ adminBot.onText(/^\/addbot\s+(\d+)\s+([^\s]+)\s+([^\s]+)\s+(.+)$/, async (msg, m
   }
 });
 
-// Admin Buy Bot QR
-adminBot.onText(/^\/buybot$/, async (msg) => {
-  if (msg.from.id.toString() !== SUPER_ADMIN_ID) return;
-  const chatId = msg.chat.id;
-  const upiUrl = `upi://pay?pa=${UPI_ID}&pn=PremiumBot&am=300&cu=INR&tn=Bot_Premium_Admin`;
-
-  try {
-    const qrBuffer = await QRCode.toBuffer(upiUrl);
-    adminBot.sendPhoto(chatId, qrBuffer, {
-      caption: `🤖 <b>Premium Subscription (₹300/Week)</b>\n\nPay and send screenshot to Admin.`,
-      parse_mode: 'HTML'
-    });
-  } catch (err) { adminBot.sendMessage(chatId, `❌ QR Generation Failed.`); }
-});
-
-// Admin Channel Post Listener
 adminBot.on('channel_post', async (msg) => {
   const username = msg.chat.username?.toLowerCase();
   if (!username) return;
@@ -183,18 +200,12 @@ adminBot.on('channel_post', async (msg) => {
   if (result.ok) console.log(`✅ [Admin] Success: ${link}`);
 });
 
-
 // ==========================================
 // 2. CUSTOMER BOTS (Dynamic)
 // ==========================================
 async function startCustomerBot(user) {
   if (!user.botToken) return;
-  
-  // 🛑 SAFETY CHECK: Prevents Admin ID from running as customer
-  if (user.userId.toString() === SUPER_ADMIN_ID) {
-    console.log(`⚠️ Ignored: Admin ID (${user.userId}) is registered as a customer in DB.`);
-    return; 
-  }
+  if (user.userId.toString() === SUPER_ADMIN_ID) return; 
 
   try {
     const bot = new TelegramBot(user.botToken, { polling: false });
@@ -202,13 +213,36 @@ async function startCustomerBot(user) {
     await bot.setWebHook(`${WEBHOOK_URL}${botPath}`);
     activeBots[user.userId] = bot;
 
-    // Customer Start Menu
     bot.onText(/^\/start$/, (msg) => {
-      const customerMenu = `👋 <b>Welcome to Premium Bot!</b>\n\nUse <code>/setqty 50</code> to change order quantity.\n/buybot to purchase premium.`;
-      bot.sendMessage(msg.chat.id, customerMenu, { parse_mode: 'HTML' });
+      const welcomeText = `👋 <b>Hello ${msg.from.first_name}!</b>\n\nThis is a premium telegram reaction bot. That's provides high quality reaction service. Buy the service packages given below 👇`;
+      const menu = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📅 1 Week - ₹300', callback_data: 'buy_300' }],
+            [{ text: '📅 1 Month - ₹1000', callback_data: 'buy_1000' }],
+            [{ text: '📅 6 Months - ₹5000', callback_data: 'buy_5000' }],
+            [{ text: '📅 1 Year - ₹9000', callback_data: 'buy_9000' }]
+          ]
+        },
+        parse_mode: 'HTML'
+      };
+      bot.sendMessage(msg.chat.id, welcomeText, menu).catch(()=>{});
     });
 
-    // Customer Set Qty
+    bot.on('callback_query', async (query) => {
+      if (query.data.startsWith('buy_')) {
+        const amount = query.data.split('_')[1];
+        const chatId = query.message.chat.id;
+        const upiUrl = `upi://pay?pa=${UPI_ID}&pn=PremiumBot&am=${amount}&cu=INR&tn=Bot_Premium_${query.from.id}`;
+        try {
+          const qrBuffer = await QRCode.toBuffer(upiUrl);
+          const caption = `✅ <b>Selected Plan: ₹${amount}</b>\n\nScan this QR code and pay ₹${amount} to <b>${UPI_ID}</b>.\n\nAfter payment, send the screenshot to ${SUPER_ADMIN_USERNAME} for activation.`;
+          bot.sendPhoto(chatId, qrBuffer, { caption: caption, parse_mode: 'HTML' });
+          bot.answerCallbackQuery(query.id, { text: 'QR Generated!' });
+        } catch (err) { bot.sendMessage(chatId, `❌ Error generating QR.`); }
+      }
+    });
+
     bot.onText(/^\/setqty\s+(\d+)$/, async (msg, match) => {
       const qty = parseInt(match[1], 10);
       if (qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid quantity.');
@@ -216,20 +250,6 @@ async function startCustomerBot(user) {
       bot.sendMessage(msg.chat.id, `✅ Quantity updated to <b>${qty}</b>`, { parse_mode: 'HTML' });
     });
 
-    // Customer Buy Bot QR
-    bot.onText(/^\/buybot$/, async (msg) => {
-      const chatId = msg.chat.id;
-      const upiUrl = `upi://pay?pa=${UPI_ID}&pn=PremiumBot&am=300&cu=INR&tn=Bot_Premium_${msg.from.id}`;
-      try {
-        const qrBuffer = await QRCode.toBuffer(upiUrl);
-        bot.sendPhoto(chatId, qrBuffer, {
-          caption: `🤖 <b>Premium Subscription (₹300/Week)</b>\n\nPay and send screenshot to admin.`,
-          parse_mode: 'HTML'
-        });
-      } catch (err) { bot.sendMessage(chatId, `❌ QR Generation Failed.`); }
-    });
-
-    // Customer Channel Post Listener
     bot.on('channel_post', async (msg) => {
       const username = msg.chat.username?.toLowerCase();
       if (!username) return;
@@ -262,9 +282,6 @@ app.post('/webhook/:userId', (req, res) => {
 
 app.get('/', (req, res) => res.send('Hybrid Multi-Bot is running!'));
 
-// ==========================================
-// RECONNECT BOTS ON STARTUP
-// ==========================================
 async function reconnectAllBots() {
   const usersWithBots = await User.find({ botToken: { $ne: null }, isPremium: true });
   for (const user of usersWithBots) {
