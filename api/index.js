@@ -31,10 +31,7 @@ const WEBHOOK_URL = process.env.RENDER_EXTERNAL_URL
 // DATABASE MODELS
 // ==========================================
 mongoose.connect(MONGO_URI)
-  .then(() => {
-    console.log('✅ Connected to MongoDB');
-    initDatabase();
-  })
+  .then(() => { console.log('✅ Connected to MongoDB'); initDatabase(); })
   .catch(err => console.log('❌ MongoDB Error:', err.message));
 
 const User = mongoose.model('User', new mongoose.Schema({
@@ -64,7 +61,7 @@ const Setting = mongoose.model('Setting', new mongoose.Schema({
   value: { type: String }
 }));
 
-// SAFE INITIALIZATION (Data Reset Problem Solved)
+// SAFE INITIALIZATION
 async function initDatabase() {
   try {
     const settingCount = await Setting.countDocuments();
@@ -77,7 +74,6 @@ async function initDatabase() {
       ]);
       console.log('✅ Default Settings Created');
     }
-    
     const packCount = await Package.countDocuments();
     if (packCount === 0) {
       await Package.create([
@@ -88,9 +84,7 @@ async function initDatabase() {
       ]);
       console.log('✅ Default Packages Created');
     }
-  } catch (err) {
-    console.log('❌ Init DB Error:', err.message);
-  }
+  } catch (err) { console.log('❌ Init DB Error:', err.message); }
 }
 
 // ==========================================
@@ -113,7 +107,7 @@ async function placeOrder(link, quantity, apiKey) {
 }
 
 // ==========================================
-// 1. MASTER BOT (Admin Bot & Normal User)
+// 1. MASTER BOT (Admin Bot)
 // ==========================================
 const adminBot = new TelegramBot(MASTER_BOT_TOKEN, { polling: false });
 
@@ -126,21 +120,15 @@ app.post('/webhook/admin', (req, res) => {
   res.sendStatus(200);
 });
 
-// Welcome & Menu Function (Users ke liye)
 async function sendWelcomeMenu(chatId, firstName) {
   const welcomeText = `👋 <b>Hello ${firstName}!</b>\n\nThis is a premium telegram reaction bot. That's provides high quality reaction service. Buy the service packages given below 👇`;
-  
   const packages = await Package.find({});
   if (packages.length === 0) return adminBot.sendMessage(chatId, "❌ No packages available right now.");
-
-  const keyboard = packages.map(p => [
-    { text: `📅 ${p.name} - ₹${p.price}`, callback_data: `buy_pkg_${p._id}` }
-  ]);
+  const keyboard = packages.map(p => [{ text: `📅 ${p.name} - ₹${p.price}`, callback_data: `buy_pkg_${p._id}` }]);
   const menu = { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'HTML' };
   await adminBot.sendMessage(chatId, welcomeText, menu).catch(() => {});
 }
 
-// START COMMAND
 adminBot.onText(/^\/start$/, async (msg) => {
   if (msg.from.id.toString() === SUPER_ADMIN_ID) {
     adminBot.sendMessage(msg.chat.id, `👑 <b>Welcome Admin!</b>\n\nAapke saare controls ab Web Dashboard par shift ho gaye hain.\n\n🌐 <b>Dashboard Link:</b>\n<a href="${WEBHOOK_URL}/admin.html">Open Admin Panel</a>`, { parse_mode: 'HTML', disable_web_page_preview: true });
@@ -149,7 +137,6 @@ adminBot.onText(/^\/start$/, async (msg) => {
   }
 });
 
-// ADMIN COMMAND ERROR MESSAGE
 adminBot.onText(/^\/admin$/, (msg) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) {
     adminBot.sendMessage(msg.chat.id, `❌ <b>YOU ARE NOT AN ADMIN, PLEASE USE /start TO USE BOT</b>`, { parse_mode: 'HTML' });
@@ -158,7 +145,6 @@ adminBot.onText(/^\/admin$/, (msg) => {
   }
 });
 
-// USER CALLBACK QUERIES (Package Buy & Payment)
 adminBot.on('callback_query', async (query) => {
   const data = query.data;
   const chatId = query.message.chat.id;
@@ -167,16 +153,13 @@ adminBot.on('callback_query', async (query) => {
     const pkgId = data.replace('buy_pkg_', '');
     const pkg = await Package.findById(pkgId);
     if (!pkg) return adminBot.answerCallbackQuery(query.id, { text: 'Package not found!', show_alert: true });
-    
     adminBot.answerCallbackQuery(query.id, { text: `Selected ${pkg.name}` });
     const payKeyboard = {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '💳 Pay via UPI', callback_data: `pay_upi_${pkg._id}` }],
-          [{ text: '🪙 Pay via USDT', callback_data: `pay_usdt_${pkg._id}` }],
-          [{ text: '⬅️ Back', callback_data: 'back_to_menu' }]
-        ]
-      }
+      reply_markup: { inline_keyboard: [
+        [{ text: '💳 Pay via UPI', callback_data: `pay_upi_${pkg._id}` }],
+        [{ text: '🪙 Pay via USDT', callback_data: `pay_usdt_${pkg._id}` }],
+        [{ text: '⬅️ Back', callback_data: 'back_to_menu' }]
+      ]}
     };
     adminBot.sendMessage(chatId, `You selected: <b>${pkg.name}</b> (₹${pkg.price})\n\nChoose payment method:`, { parse_mode: 'HTML', ...payKeyboard });
   }
@@ -210,7 +193,6 @@ adminBot.on('callback_query', async (query) => {
   }
 });
 
-
 // ==========================================
 // 2. CUSTOMER BOTS (Dynamic)
 // ==========================================
@@ -236,7 +218,6 @@ async function startCustomerBot(user) {
     bot.on('channel_post', async (msg) => {
       const username = msg.chat.username?.toLowerCase();
       if (!username) return;
-
       const dbUser = await User.findOne({ userId: user.userId });
       if (!dbUser.isPremium || dbUser.expiryDate < new Date()) return;
       if (!dbUser.channels.includes(username)) return;
@@ -253,12 +234,9 @@ async function startCustomerBot(user) {
 
 app.post('/webhook/:userId', (req, res) => {
   const userId = req.params.userId;
-  if (activeBots[userId]) {
-    activeBots[userId].processUpdate(req.body);
-  }
+  if (activeBots[userId]) activeBots[userId].processUpdate(req.body);
   res.sendStatus(200);
 });
-
 
 // ==========================================
 // 3. ADVANCED ADMIN WEB DASHBOARD API ROUTES
@@ -327,11 +305,7 @@ app.get('/api/admin/get-channels', async (req, res) => {
 app.post('/api/admin/add-channel', async (req, res) => {
   const { username, quantity } = req.body;
   try {
-    await AdminChannel.findOneAndUpdate(
-      { username: username.toLowerCase() }, 
-      { quantity: parseInt(quantity) }, 
-      { upsert: true }
-    );
+    await AdminChannel.findOneAndUpdate({ username: username.toLowerCase() }, { quantity: parseInt(quantity) }, { upsert: true });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -351,16 +325,25 @@ app.post('/api/admin/approve-user', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.post('/api/admin/add-customer-bot', async (req, res) => {
+  const { userId, botToken, apiKey, channels } = req.body;
+  try {
+    const channelArray = channels ? channels.split(',').map(c => c.trim().replace('@', '').toLowerCase()) : [];
+    await User.findOneAndUpdate(
+      { userId: userId },
+      { botToken: botToken, panelApiKey: apiKey === 'none' ? null : apiKey, channels: channelArray },
+      { upsert: true }
+    );
+    const user = await User.findOne({ userId });
+    await startCustomerBot(user);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
-// ==========================================
-// SERVER START
-// ==========================================
 app.get('/', (req, res) => res.send('Bot is running!'));
 
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   const usersWithBots = await User.find({ botToken: { $ne: null }, isPremium: true });
-  for (const user of usersWithBots) {
-    await startCustomerBot(user);
-  }
+  for (const user of usersWithBots) await startCustomerBot(user);
 });
