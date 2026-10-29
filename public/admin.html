@@ -5,17 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>REACTION MASTER ADMIN BY PRINCE</title>
     <link rel="stylesheet" href="style.css">
+    <script>
+        // SECURITY CHECK: Bina login ke andar mat aane do
+        if(localStorage.getItem('adminLoggedIn') !== 'true') {
+            window.location.href = 'login.html';
+        }
+    </script>
 </head>
 <body>
 
     <div class="sidebar">
         <h2>REACTION<br>MASTER ADMIN BY PRINCE</h2>
-        <h2>TELEGRAM<br>@zetagamer0</h2>
         <button class="nav-btn active" onclick="openTab('tab-stats', this)">📊 Dashboard</button>
         <button class="nav-btn" onclick="openTab('tab-settings', this)">⚙️ Settings</button>
         <button class="nav-btn" onclick="openTab('tab-channels', this)">📡 Channels</button>
         <button class="nav-btn" onclick="openTab('tab-packages', this)">📦 Packages</button>
         <button class="nav-btn" onclick="openTab('tab-users', this)">👥 Users</button>
+        <button class="nav-btn" onclick="logout()" style="color: var(--danger); margin-top: auto;">🚪 Logout</button>
 
         <div class="theme-switcher">
             <div class="theme-title">Change Theme</div>
@@ -41,15 +47,24 @@
 
         <!-- TAB: Settings -->
         <div id="tab-settings" class="tab-content">
-            <div class="header"><h1>Payment Settings</h1></div>
+            <div class="header"><h1>Settings</h1></div>
+            
+            <!-- Login Credentials Update -->
+            <div class="card">
+                <h3>Update Login Credentials</h3>
+                <div class="grid-2">
+                    <div class="form-group"><label>New Username</label><input type="text" id="newUsername" placeholder="Leave empty to keep same"></div>
+                    <div class="form-group"><label>New Password</label><input type="text" id="newPassword" placeholder="Leave empty to keep same"></div>
+                </div>
+                <button id="btn-update-cred" onclick="updateCredentials()">Update Credentials</button>
+            </div>
+
             <div class="card">
                 <h3>UPI Configuration</h3>
-                <div class="form-group">
-                    <label>UPI ID (For receiving INR payments)</label>
-                    <input type="text" id="upi_id" placeholder="e.g. yourname@ybl">
-                </div>
+                <div class="form-group"><label>UPI ID (For receiving INR payments)</label><input type="text" id="upi_id" placeholder="e.g. yourname@ybl"></div>
                 <button id="btn-upi_id" onclick="saveSetting('upi_id', 'btn-upi_id')">Update UPI ID</button>
             </div>
+            
             <div class="card">
                 <h3>USDT Addresses (Crypto Payments)</h3>
                 <div class="grid-2">
@@ -74,10 +89,7 @@
             </div>
             <div class="card">
                 <h3>Active Channels</h3>
-                <table>
-                    <thead><tr><th>Channel</th><th>Quantity</th><th>Action</th></tr></thead>
-                    <tbody id="channelTableBody"><tr><td colspan="3">Loading...</td></tr></tbody>
-                </table>
+                <table><thead><tr><th>Channel</th><th>Quantity</th><th>Action</th></tr></thead><tbody id="channelTableBody"><tr><td colspan="3">Loading...</td></tr></tbody></table>
             </div>
         </div>
 
@@ -95,10 +107,7 @@
             </div>
             <div class="card">
                 <h3>Active Packages</h3>
-                <table>
-                    <thead><tr><th>Package Name</th><th>Price</th><th>Days</th><th>Action</th></tr></thead>
-                    <tbody id="packageTableBody"><tr><td colspan="4">Loading...</td></tr></tbody>
-                </table>
+                <table><thead><tr><th>Package Name</th><th>Price</th><th>Days</th><th>Action</th></tr></thead><tbody id="packageTableBody"><tr><td colspan="4">Loading...</td></tr></tbody></table>
             </div>
         </div>
 
@@ -119,10 +128,7 @@
             </div>
             <div class="card">
                 <h3>Registered Users (For Approval)</h3>
-                <table>
-                    <thead><tr><th>User Info</th><th>Status</th><th>Expiry Date</th><th>Approve Premium</th></tr></thead>
-                    <tbody id="userTableBody"><tr><td colspan="4">Loading...</td></tr></tbody>
-                </table>
+                <table><thead><tr><th>User Info</th><th>Status</th><th>Expiry Date</th><th>Approve Premium</th></tr></thead><tbody id="userTableBody"><tr><td colspan="4">Loading...</td></tr></tbody></table>
             </div>
         </div>
     </div>
