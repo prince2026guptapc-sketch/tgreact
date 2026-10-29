@@ -4,7 +4,6 @@ const axios = require('axios');
 const mongoose = require('mongoose');
 const QRCode = require('qrcode');
 const path = require('path');
-const basicAuth = require('express-basic-auth');
 
 const app = express();
 app.use(express.json());
@@ -70,7 +69,9 @@ async function initDatabase() {
         { key: 'upi_id', value: 'yourupi@ybl' },
         { key: 'usdt_trc20', value: 'YOUR_TRC20_ADDRESS' },
         { key: 'usdt_bsc', value: 'YOUR_BSC_ADDRESS' },
-        { key: 'usdt_tron', value: 'YOUR_TRON_ADDRESS' }
+        { key: 'usdt_tron', value: 'YOUR_TRON_ADDRESS' },
+        { key: 'admin_username', value: 'admin' },
+        { key: 'admin_password', value: 'admin123' }
       ]);
       console.log('✅ Default Settings Created');
     }
@@ -131,18 +132,27 @@ async function sendWelcomeMenu(chatId, firstName) {
 
 adminBot.onText(/^\/start$/, async (msg) => {
   if (msg.from.id.toString() === SUPER_ADMIN_ID) {
-    adminBot.sendMessage(msg.chat.id, `👑 <b>Welcome Admin!</b>\n\nAapke saare controls ab Web Dashboard par shift ho gaye hain.\n\n🌐 <b>Dashboard Link:</b>\n<a href="${WEBHOOK_URL}/admin.html">Open Admin Panel</a>`, { parse_mode: 'HTML', disable_web_page_preview: true });
+    adminBot.sendMessage(msg.chat.id, `👑 <b>Welcome Admin!</b>\n\nUse /admin to open your dashboard.`, { parse_mode: 'HTML' });
   } else {
     sendWelcomeMenu(msg.chat.id, msg.from.first_name);
   }
 });
 
+// ADMIN MINI APP BUTTON
 adminBot.onText(/^\/admin$/, (msg) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) {
-    adminBot.sendMessage(msg.chat.id, `❌ <b>YOU ARE NOT AN ADMIN, PLEASE USE /start TO USE BOT</b>`, { parse_mode: 'HTML' });
-  } else {
-    adminBot.sendMessage(msg.chat.id, `🌐 Aapka dashboard yahan hai: <a href="${WEBHOOK_URL}/admin.html">Click Here</a>`, { parse_mode: 'HTML' });
+    return adminBot.sendMessage(msg.chat.id, `❌ <b>YOU ARE NOT AN ADMIN, PLEASE USE /start TO USE BOT</b>`, { parse_mode: 'HTML' });
   }
+  
+  const webAppUrl = `${WEBHOOK_URL}/login.html`;
+  const miniAppMenu = {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🚀 Open Admin Panel', web_app: { url: webAppUrl } }]
+      ]
+    }
+  };
+  adminBot.sendMessage(msg.chat.id, `👑 <b>Welcome Admin!</b>\n\nClick below to open your dashboard.`, { parse_mode: 'HTML', ...miniAppMenu });
 });
 
 adminBot.on('callback_query', async (query) => {
@@ -239,9 +249,29 @@ app.post('/webhook/:userId', (req, res) => {
 });
 
 // ==========================================
-// 3. ADVANCED ADMIN WEB DASHBOARD API ROUTES
+// 3. ADMIN WEB DASHBOARD API ROUTES
 // ==========================================
-app.use('/admin.html', basicAuth({ users: { 'admin': 'admin123' }, challenge: true, realm: 'AdminPanel' }));
+app.post('/api/admin/login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const userSetting = await Setting.findOne({ key: 'admin_username' });
+    const passSetting = await Setting.findOne({ key: 'admin_password' });
+    const validUser = userSetting ? userSetting.value : 'admin';
+    const validPass = passSetting ? passSetting.value : 'admin123';
+
+    if (username === validUser && password === validPass) res.json({ success: true });
+    else res.status(401).json({ success: false, error: 'Invalid credentials' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/admin/change-password', async (req, res) => {
+  const { newUsername, newPassword } = req.body;
+  try {
+    if(newUsername) await Setting.findOneAndUpdate({ key: 'admin_username' }, { value: newUsername }, { upsert: true });
+    if(newPassword) await Setting.findOneAndUpdate({ key: 'admin_password' }, { value: newPassword }, { upsert: true });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 app.get('/api/admin/get-all-settings', async (req, res) => {
   try {
