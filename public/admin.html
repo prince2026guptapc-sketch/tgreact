@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMM Bot Admin Panel</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f0f2f5; color: #333; }
+        .container { max-width: 1000px; margin: 30px auto; padding: 0 20px; }
+        .header { background: #1a1a2e; color: white; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h3 { margin-bottom: 15px; border-bottom: 2px solid #eee; padding-bottom: 10px; color: #1a1a2e; }
+        input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; }
+        button:hover { background: #218838; }
+        .btn-danger { background: #dc3545; }
+        .btn-danger:hover { background: #c82333; }
+        .status { font-size: 14px; margin-top: 10px; text-align: center; font-weight: bold; }
+        ul { list-style-type: none; padding: 0; }
+        li { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Premium Bot Dashboard</h1>
+            <p>Manage your bot settings easily</p>
+        </div>
+
+        <div class="grid">
+            <!-- Settings Section -->
+            <div class="card">
+                <h3>💳 Payment Settings</h3>
+                <label>UPI ID</label>
+                <input type="text" id="upiInput">
+                <button onclick="updateSetting('upi_id', 'upiInput', 'upiStatus')">Update UPI</button>
+                <div id="upiStatus" class="status"></div>
+
+                <br>
+                <label>USDT Address (TRC20)</label>
+                <input type="text" id="trc20Input">
+                <button onclick="updateSetting('usdt_trc20', 'trc20Input', 'usdtStatus')">Update USDT</button>
+                <div id="usdtStatus" class="status"></div>
+            </div>
+
+            <!-- Add Package Section -->
+            <div class="card">
+                <h3>📦 Add New Package</h3>
+                <input type="text" id="pkgName" placeholder="Package Name (e.g., 1 Month)">
+                <input type="number" id="pkgPrice" placeholder="Price (e.g., 1000)">
+                <input type="number" id="pkgDays" placeholder="Days (e.g., 30)">
+                <button onclick="addPackage()">Add Package</button>
+                <div id="pkgStatus" class="status"></div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- Stats Section -->
+            <div class="card">
+                <h3>📊 Live Stats</h3>
+                <p>Total Users: <b id="totalUsers">0</b></p>
+                <p>Premium Users: <b id="premiumUsers">0</b></p>
+            </div>
+
+            <!-- List Packages Section -->
+            <div class="card">
+                <h3>📋 Current Packages</h3>
+                <ul id="packageList">
+                    <li>Loading...</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = window.location.origin;
+
+        async function loadData() {
+            const res = await fetch(`${API}/api/admin/get-settings`);
+            const data = await res.json();
+            document.getElementById('upiInput').value = data.upi || '';
+            document.getElementById('trc20Input').value = data.trc20 || '';
+
+            const statsRes = await fetch(`${API}/api/admin/stats`);
+            const stats = await statsRes.json();
+            document.getElementById('totalUsers').innerText = stats.totalUsers || 0;
+            document.getElementById('premiumUsers').innerText = stats.premiumUsers || 0;
+
+            loadPackages();
+        }
+
+        async function loadPackages() {
+            const res = await fetch(`${API}/api/admin/get-packages`);
+            const packages = await res.json();
+            const list = document.getElementById('packageList');
+            list.innerHTML = '';
+            
+            if (packages.length === 0) {
+                list.innerHTML = '<li>No packages found.</li>';
+                return;
+            }
+
+            packages.forEach(p => {
+                list.innerHTML += `
+                    <li>
+                        <div><b>${p.name}</b> - ₹${p.price} (${p.days} days)</div>
+                        <button class="btn-danger" style="width: auto; padding: 5px 10px;" onclick="deletePackage('${p._id}')">Delete</button>
+                    </li>
+                `;
+            });
+        }
+
+        async function updateSetting(key, inputId, statusId) {
+            const value = document.getElementById(inputId).value;
+            const res = await fetch(`${API}/api/admin/update-setting`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key, value })
+            });
+            if (res.ok) {
+                document.getElementById(statusId).innerText = '✅ Updated Successfully!';
+                document.getElementById(statusId).style.color = 'green';
+            } else {
+                document.getElementById(statusId).innerText = '❌ Update Failed!';
+                document.getElementById(statusId).style.color = 'red';
+            }
+            setTimeout(() => document.getElementById(statusId).innerText = '', 3000);
+        }
+
+        async function addPackage() {
+            const name = document.getElementById('pkgName').value;
+            const price = document.getElementById('pkgPrice').value;
+            const days = document.getElementById('pkgDays').value;
+
+            if (!name || !price || !days) return alert('Please fill all fields');
+
+            const res = await fetch(`${API}/api/admin/add-package`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, price, days })
+            });
+            
+            if (res.ok) {
+                document.getElementById('pkgStatus').innerText = '✅ Package Added!';
+                document.getElementById('pkgStatus').style.color = 'green';
+                document.getElementById('pkgName').value = '';
+                document.getElementById('pkgPrice').value = '';
+                document.getElementById('pkgDays').value = '';
+                loadPackages();
+            } else {
+                document.getElementById('pkgStatus').innerText = '❌ Failed to add!';
+                document.getElementById('pkgStatus').style.color = 'red';
+            }
+            setTimeout(() => document.getElementById('pkgStatus').innerText = '', 3000);
+        }
+
+        async function deletePackage(id) {
+            if(!confirm('Are you sure you want to delete this package?')) return;
+            const res = await fetch(`${API}/api/admin/delete-package/${id}`, { method: 'DELETE' });
+            if (res.ok) loadPackages();
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
