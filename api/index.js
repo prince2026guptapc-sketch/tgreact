@@ -230,6 +230,28 @@ async function startCustomerBot(user) {
 // ==========================================
 // Dashboard ko password se protect kiya (admin / admin123)
 app.use('/admin.html', basicAuth({ users: { 'admin': 'admin123' }, challenge: true, realm: 'AdminPanel' }));
+// Naya Route: Saare users ki list dekhne ke liye
+app.get('/api/admin/get-users', async (req, res) => {
+  try {
+    // Sirf zaroori fields fetch kar rahe hain
+    const users = await User.find({}, 'userId firstName isPremium expiryDate quantity').sort({ _id: -1 });
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Naya Route: Saari settings (UPI + USDT) ek saath lene ke liye
+app.get('/api/admin/get-all-settings', async (req, res) => {
+  try {
+    const settings = await Setting.find({});
+    let data = { upi_id: '', usdt_trc20: '', usdt_bsc: '', usdt_tron: '' };
+    settings.forEach(s => { if(data[s.key] !== undefined) data[s.key] = s.value; });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Get Settings
 app.get('/api/admin/get-settings', async (req, res) => {
