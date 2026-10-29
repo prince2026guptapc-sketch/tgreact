@@ -33,7 +33,6 @@ function showToast(msg, isError = false) {
     setTimeout(() => toast.style.display = 'none', 3000);
 }
 
-// 🟢 GREEN TICK HELPER FUNCTION 🟢
 function showTick(btnId, originalText) {
     const btn = document.getElementById(btnId);
     if(!btn) return;
@@ -45,7 +44,13 @@ function showTick(btnId, originalText) {
     }, 2000);
 }
 
-// --- 1. Settings ---
+// --- LOGOUT ---
+function logout() {
+    localStorage.removeItem('adminLoggedIn');
+    window.location.href = 'login.html';
+}
+
+// --- 1. Settings & Credentials ---
 async function loadSettings() {
     const res = await fetch(`${API}/api/admin/get-all-settings`);
     const data = await res.json();
@@ -74,6 +79,21 @@ async function saveAllUsdt() {
         fetch(`${API}/api/admin/update-setting`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ key: 'usdt_tron', value: tron }) })
     ]);
     showTick('btn-usdt_all', 'Update All USDT Addresses');
+}
+
+async function updateCredentials() {
+    const newUsername = document.getElementById('newUsername').value;
+    const newPassword = document.getElementById('newPassword').value;
+    if(!newUsername && !newPassword) return alert('Enter new username or password!');
+
+    await fetch(`${API}/api/admin/change-password`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ newUsername, newPassword })
+    });
+    
+    document.getElementById('newUsername').value = '';
+    document.getElementById('newPassword').value = '';
+    showTick('btn-update-cred', 'Update Credentials');
 }
 
 // --- 2. Channels ---
