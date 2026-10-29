@@ -1,3 +1,53 @@
+// Code ke top par add karein
+const translations = {
+  en: {
+    welcome: (name) => `👋 <b>Hello ${name}!</b>\n\nThis is a premium telegram reaction bot. Buy packages below 👇`,
+    selectLang: `Please select your language / कृपया अपनी भाषा चुनें:`,
+    choosePayment: `Choose payment method:`,
+    payUpi: `💳 Pay via UPI`,
+    payUsdt: `🪙 Pay via USDT`
+  },
+  hi: {
+    welcome: (name) => `👋 <b>नमस्ते ${name}!</b>\n\nयह एक प्रीमियम टेलीग्राम रिएक्शन बॉट है। नीचे पैकेज खरीदें 👇`,
+    selectLang: `कृपया अपनी भाषा चुनें:`,
+    choosePayment: `भुगतान विधि चुनें:`,
+    payUpi: `💳 UPI से भुगतान करें`,
+    payUsdt: `🪙 USDT से भुगतान करें`
+  }
+};
+
+// /start command mein language ka option add karein
+adminBot.onText(/^\/start$/, async (msg) => {
+  if (msg.from.id.toString() === SUPER_ADMIN_ID) {
+    // Admin menu same rahega
+  } else {
+    // Language choose karne ka button
+    const langMenu = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🇬🇧 English', callback_data: 'lang_en' }],
+          [{ text: '🇮🇳 हिंदी', callback_data: 'lang_hi' }]
+        ]
+      }
+    };
+    adminBot.sendMessage(msg.chat.id, translations.en.selectLang, langMenu);
+  }
+});
+
+// Callback query handle karein
+adminBot.on('callback_query', async (query) => {
+  const chatId = query.message.chat.id;
+  const lang = query.data.split('_')[1]; // 'en' ya 'hi'
+
+  if (query.data.startsWith('lang_')) {
+    // User ki language database mein save karein (User model mein 'lang' field add karna hoga)
+    await User.updateOne({ userId: query.from.id.toString() }, { lang: lang }, { upsert: true });
+    
+    const t = translations[lang];
+    adminBot.sendMessage(chatId, t.welcome(query.from.first_name));
+    adminBot.answerCallbackQuery(query.id, { text: `Language changed to ${lang === 'en' ? 'English' : 'Hindi'}` });
+  }
+});
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
