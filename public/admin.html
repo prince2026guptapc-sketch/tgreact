@@ -3,23 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>REACTION MASTER ADMIN {BY PRINCE}</title>
-    <!-- CSS file link -->
+    <title>REACTION MASTER ADMIN BY PRINCE</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <!-- Sidebar -->
     <div class="sidebar">
-        <h2>REACTION<br>MASTER ADMIN {BY PRINCE}</h2>
-        
+        <h2>REACTION<br>MASTER ADMIN BY PRINCE</h2>
+        <h1>TELEGRAM<br>@zetagamer0</h1>
         <button class="nav-btn active" onclick="openTab('tab-stats', this)">📊 Dashboard</button>
         <button class="nav-btn" onclick="openTab('tab-settings', this)">⚙️ Settings</button>
         <button class="nav-btn" onclick="openTab('tab-channels', this)">📡 Channels</button>
         <button class="nav-btn" onclick="openTab('tab-packages', this)">📦 Packages</button>
         <button class="nav-btn" onclick="openTab('tab-users', this)">👥 Users</button>
 
-        <!-- Theme Switcher -->
         <div class="theme-switcher">
             <div class="theme-title">Change Theme</div>
             <div class="theme-btns">
@@ -32,54 +29,35 @@
         </div>
     </div>
 
-    <!-- Main Content -->
     <div class="main-content">
-        
         <!-- TAB: Dashboard Stats -->
         <div id="tab-stats" class="tab-content active">
             <div class="header"><h1>Overview</h1></div>
             <div class="grid-2">
-                <div class="card">
-                    <h3>Total Users</h3>
-                    <h2 id="statTotalUsers" style="font-size: 42px; color: var(--primary);">0</h2>
-                </div>
-                <div class="card">
-                    <h3>Premium Users</h3>
-                    <h2 id="statPremiumUsers" style="font-size: 42px; color: var(--success);">0</h2>
-                </div>
+                <div class="card"><h3>Total Users</h3><h2 id="statTotalUsers" style="font-size: 42px; color: var(--primary);">0</h2></div>
+                <div class="card"><h3>Premium Users</h3><h2 id="statPremiumUsers" style="font-size: 42px; color: var(--success);">0</h2></div>
             </div>
         </div>
 
-        <!-- TAB: Settings (UPI & USDT) -->
+        <!-- TAB: Settings -->
         <div id="tab-settings" class="tab-content">
             <div class="header"><h1>Payment Settings</h1></div>
-            
             <div class="card">
                 <h3>UPI Configuration</h3>
                 <div class="form-group">
                     <label>UPI ID (For receiving INR payments)</label>
                     <input type="text" id="upi_id" placeholder="e.g. yourname@ybl">
                 </div>
-                <button onclick="saveSetting('upi_id')">Update UPI ID</button>
+                <button id="btn-upi_id" onclick="saveSetting('upi_id', 'btn-upi_id')">Update UPI ID</button>
             </div>
-            
             <div class="card">
                 <h3>USDT Addresses (Crypto Payments)</h3>
                 <div class="grid-2">
-                    <div class="form-group">
-                        <label>TRC20 Address</label>
-                        <input type="text" id="usdt_trc20" placeholder="T...">
-                    </div>
-                    <div class="form-group">
-                        <label>BSC (BEP20) Address</label>
-                        <input type="text" id="usdt_bsc" placeholder="0x...">
-                    </div>
+                    <div class="form-group"><label>TRC20 Address</label><input type="text" id="usdt_trc20" placeholder="T..."></div>
+                    <div class="form-group"><label>BSC (BEP20) Address</label><input type="text" id="usdt_bsc" placeholder="0x..."></div>
                 </div>
-                <div class="form-group">
-                    <label>TRON Address</label>
-                    <input type="text" id="usdt_tron" placeholder="T...">
-                </div>
-                <button onclick="saveAllUsdt()">Update All USDT Addresses</button>
+                <div class="form-group"><label>TRON Address</label><input type="text" id="usdt_tron" placeholder="T..."></div>
+                <button id="btn-usdt_all" onclick="saveAllUsdt()">Update All USDT Addresses</button>
             </div>
         </div>
 
@@ -89,24 +67,16 @@
             <div class="card">
                 <h3>Add / Update Channel</h3>
                 <div class="grid-2">
-                    <div class="form-group">
-                        <label>Channel Username</label>
-                        <input type="text" id="chUsername" placeholder="@mychannel">
-                    </div>
-                    <div class="form-group">
-                        <label>Default Quantity</label>
-                        <input type="number" id="chQty" placeholder="e.g. 50">
-                    </div>
+                    <div class="form-group"><label>Channel Username</label><input type="text" id="chUsername" placeholder="@mychannel"></div>
+                    <div class="form-group"><label>Default Quantity</label><input type="number" id="chQty" placeholder="e.g. 50"></div>
                 </div>
-                <button onclick="addChannel()">Save Channel</button>
+                <button id="btn-addchannel" onclick="addChannel()">Save Channel</button>
             </div>
             <div class="card">
                 <h3>Active Channels</h3>
                 <table>
                     <thead><tr><th>Channel</th><th>Quantity</th><th>Action</th></tr></thead>
-                    <tbody id="channelTableBody">
-                        <tr><td colspan="3">Loading...</td></tr>
-                    </tbody>
+                    <tbody id="channelTableBody"><tr><td colspan="3">Loading...</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -117,57 +87,47 @@
             <div class="card">
                 <h3>Add New Package</h3>
                 <div class="grid-2">
-                    <div class="form-group">
-                        <label>Package Name</label>
-                        <input type="text" id="pkgName" placeholder="e.g. 1 Month Premium">
-                    </div>
-                    <div class="form-group">
-                        <label>Price (₹)</label>
-                        <input type="number" id="pkgPrice" placeholder="e.g. 1000">
-                    </div>
+                    <div class="form-group"><label>Package Name</label><input type="text" id="pkgName" placeholder="e.g. 1 Month Premium"></div>
+                    <div class="form-group"><label>Price (₹)</label><input type="number" id="pkgPrice" placeholder="e.g. 1000"></div>
                 </div>
-                <div class="form-group">
-                    <label>Duration (Days)</label>
-                    <input type="number" id="pkgDays" placeholder="e.g. 30">
-                </div>
-                <button onclick="addPackage()">Add Package</button>
+                <div class="form-group"><label>Duration (Days)</label><input type="number" id="pkgDays" placeholder="e.g. 30"></div>
+                <button id="btn-addpackage" onclick="addPackage()">Add Package</button>
             </div>
             <div class="card">
                 <h3>Active Packages</h3>
                 <table>
                     <thead><tr><th>Package Name</th><th>Price</th><th>Days</th><th>Action</th></tr></thead>
-                    <tbody id="packageTableBody">
-                        <tr><td colspan="4">Loading...</td></tr>
-                    </tbody>
+                    <tbody id="packageTableBody"><tr><td colspan="4">Loading...</td></tr></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- TAB: Users -->
+        <!-- TAB: Users & Customer Bots -->
         <div id="tab-users" class="tab-content">
-            <div class="header"><h1>Registered Users</h1></div>
+            <div class="header"><h1>Users & Customer Bots</h1></div>
             <div class="card">
+                <h3>Add / Update Customer Bot</h3>
+                <div class="grid-2">
+                    <div class="form-group"><label>Customer User ID</label><input type="text" id="botUserId" placeholder="e.g. 6402927432"></div>
+                    <div class="form-group"><label>Bot Token</label><input type="text" id="botToken" placeholder="123456:ABC-DEF..."></div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group"><label>Panel API Key (Optional)</label><input type="text" id="botApiKey" placeholder="Leave empty to use Master"></div>
+                    <div class="form-group"><label>Channels (Comma separated)</label><input type="text" id="botChannels" placeholder="@channel1, @channel2"></div>
+                </div>
+                <button id="btn-addbot" onclick="addCustomerBot()">Add / Update Customer Bot</button>
+            </div>
+            <div class="card">
+                <h3>Registered Users (For Approval)</h3>
                 <table>
-                    <thead>
-                        <tr>
-                            <th>User Info</th>
-                            <th>Status</th>
-                            <th>Expiry Date</th>
-                            <th>Approve Premium</th>
-                        </tr>
-                    </thead>
-                    <tbody id="userTableBody">
-                        <tr><td colspan="4">Loading...</td></tr>
-                    </tbody>
+                    <thead><tr><th>User Info</th><th>Status</th><th>Expiry Date</th><th>Approve Premium</th></tr></thead>
+                    <tbody id="userTableBody"><tr><td colspan="4">Loading...</td></tr></tbody>
                 </table>
             </div>
         </div>
-
     </div>
 
     <div id="toast" class="toast">Done!</div>
-
-    <!-- JS File Link -->
     <script src="script.js"></script>
 </body>
 </html>
