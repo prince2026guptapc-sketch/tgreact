@@ -3,36 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SMM Bot Pro Dashboard</title>
+    <title>REACTION MASTER ADMIN [by PRINCE]</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
         body { background-color: #0f172a; color: #e2e8f0; display: flex; min-height: 100vh; }
         
         /* Sidebar */
-        .sidebar { width: 250px; background: #1e293b; padding: 20px; position: fixed; height: 100%; border-right: 1px solid #334155; }
+        .sidebar { width: 260px; background: #1e293b; padding: 20px; position: fixed; height: 100%; border-right: 1px solid #334155; }
         .sidebar h2 { font-size: 20px; margin-bottom: 30px; color: #38bdf8; text-align: center; }
         .nav-btn { display: block; width: 100%; padding: 12px 15px; margin-bottom: 10px; background: transparent; border: none; color: #94a3b8; text-align: left; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 600; transition: 0.3s; }
         .nav-btn:hover, .nav-btn.active { background: #334155; color: #38bdf8; }
 
         /* Main Content */
-        .main-content { margin-left: 250px; padding: 30px; width: calc(100% - 250px); }
+        .main-content { margin-left: 260px; padding: 30px; width: calc(100% - 260px); }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
         .header h1 { font-size: 24px; color: #f8fafc; }
         
-        /* Cards */
-        .card { background: #1e293b; border-radius: 12px; padding: 25px; margin-bottom: 25px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 1px solid #334155; }
+        /* Cards & Forms */
+        .card { background: #1e293b; border-radius: 12px; padding: 25px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border: 1px solid #334155; }
         .card h3 { font-size: 18px; color: #f8fafc; margin-bottom: 20px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
-        
-        /* Forms & Inputs */
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-size: 13px; color: #94a3b8; }
-        input { width: 100%; padding: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; outline: none; transition: 0.3s; }
+        input { width: 100%; padding: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; outline: none; }
         input:focus { border-color: #38bdf8; }
         button { background: #38bdf8; color: #0f172a; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; width: 100%; }
         button:hover { background: #0ea5e9; }
         .btn-danger { background: #ef4444; color: white; width: auto; padding: 6px 12px; font-size: 12px; }
         .btn-danger:hover { background: #dc2626; }
+        .btn-approve { background: #22c55e; color: white; width: auto; padding: 6px 12px; font-size: 12px; margin-right: 5px; }
+        .btn-approve:hover { background: #16a34a; }
         
         /* Grid Layouts */
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
@@ -45,7 +45,6 @@
         .status-active { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
         .status-expired { background: rgba(239, 68, 68, 0.2); color: #f87171; }
 
-        /* Hide elements */
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
@@ -54,30 +53,23 @@
 </head>
 <body>
 
-    <!-- Sidebar -->
     <div class="sidebar">
         <h2>⚡ SMM Pro Panel</h2>
         <button class="nav-btn active" onclick="openTab('tab-stats', this)">📊 Dashboard</button>
         <button class="nav-btn" onclick="openTab('tab-settings', this)">⚙️ Settings</button>
+        <button class="nav-btn" onclick="openTab('tab-channels', this)">📡 Channels</button>
         <button class="nav-btn" onclick="openTab('tab-packages', this)">📦 Packages</button>
         <button class="nav-btn" onclick="openTab('tab-users', this)">👥 Users</button>
     </div>
 
-    <!-- Main Content -->
     <div class="main-content">
         
-        <!-- TAB: Dashboard Stats -->
+        <!-- TAB: Stats -->
         <div id="tab-stats" class="tab-content active">
             <div class="header"><h1>Overview</h1></div>
             <div class="grid-2">
-                <div class="card">
-                    <h3>Total Users</h3>
-                    <h2 id="statTotalUsers" style="font-size: 36px; color: #38bdf8;">0</h2>
-                </div>
-                <div class="card">
-                    <h3>Premium Users</h3>
-                    <h2 id="statPremiumUsers" style="font-size: 36px; color: #22c55e;">0</h2>
-                </div>
+                <div class="card"><h3>Total Users</h3><h2 id="statTotalUsers" style="font-size: 36px; color: #38bdf8;">0</h2></div>
+                <div class="card"><h3>Premium Users</h3><h2 id="statPremiumUsers" style="font-size: 36px; color: #22c55e;">0</h2></div>
             </div>
         </div>
 
@@ -87,29 +79,39 @@
             <div class="card">
                 <h3>UPI Configuration</h3>
                 <div class="form-group">
-                    <label>UPI ID (For receiving INR payments)</label>
+                    <label>UPI ID</label>
                     <input type="text" id="upi_id" placeholder="e.g. yourname@ybl">
                 </div>
                 <button onclick="saveSetting('upi_id')">Update UPI ID</button>
             </div>
-            
             <div class="card">
-                <h3>USDT Addresses (Crypto Payments)</h3>
+                <h3>USDT Addresses</h3>
                 <div class="grid-2">
-                    <div class="form-group">
-                        <label>TRC20 Address</label>
-                        <input type="text" id="usdt_trc20" placeholder="T...">
-                    </div>
-                    <div class="form-group">
-                        <label>BSC (BEP20) Address</label>
-                        <input type="text" id="usdt_bsc" placeholder="0x...">
-                    </div>
+                    <div class="form-group"><label>TRC20</label><input type="text" id="usdt_trc20"></div>
+                    <div class="form-group"><label>BSC (BEP20)</label><input type="text" id="usdt_bsc"></div>
                 </div>
-                <div class="form-group">
-                    <label>TRON Address</label>
-                    <input type="text" id="usdt_tron" placeholder="T...">
-                </div>
+                <div class="form-group"><label>TRON</label><input type="text" id="usdt_tron"></div>
                 <button onclick="saveAllUsdt()">Update All USDT Addresses</button>
+            </div>
+        </div>
+
+        <!-- TAB: Channels (NEW) -->
+        <div id="tab-channels" class="tab-content">
+            <div class="header"><h1>Manage Channels</h1></div>
+            <div class="card">
+                <h3>Add Channel</h3>
+                <div class="grid-2">
+                    <div class="form-group"><label>Channel Username</label><input type="text" id="chUsername" placeholder="@mychannel"></div>
+                    <div class="form-group"><label>Default Quantity</label><input type="number" id="chQty" placeholder="e.g. 50"></div>
+                </div>
+                <button onclick="addChannel()">Add / Update Channel</button>
+            </div>
+            <div class="card">
+                <h3>Active Channels</h3>
+                <table>
+                    <thead><tr><th>Channel</th><th>Quantity</th><th>Action</th></tr></thead>
+                    <tbody id="channelTableBody"></tbody>
+                </table>
             </div>
         </div>
 
@@ -119,36 +121,17 @@
             <div class="card">
                 <h3>Add New Package</h3>
                 <div class="grid-2">
-                    <div class="form-group">
-                        <label>Package Name</label>
-                        <input type="text" id="pkgName" placeholder="e.g. 1 Month Premium">
-                    </div>
-                    <div class="form-group">
-                        <label>Price (₹)</label>
-                        <input type="number" id="pkgPrice" placeholder="e.g. 1000">
-                    </div>
+                    <div class="form-group"><label>Package Name</label><input type="text" id="pkgName"></div>
+                    <div class="form-group"><label>Price (₹)</label><input type="number" id="pkgPrice"></div>
                 </div>
-                <div class="form-group">
-                    <label>Duration (Days)</label>
-                    <input type="number" id="pkgDays" placeholder="e.g. 30">
-                </div>
+                <div class="form-group"><label>Duration (Days)</label><input type="number" id="pkgDays"></div>
                 <button onclick="addPackage()">Add Package</button>
             </div>
-
             <div class="card">
                 <h3>Active Packages</h3>
                 <table>
-                    <thead>
-                        <tr>
-                            <th>Package Name</th>
-                            <th>Price</th>
-                            <th>Days</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="packageTableBody">
-                        <tr><td colspan="4">Loading...</td></tr>
-                    </tbody>
+                    <thead><tr><th>Name</th><th>Price</th><th>Days</th><th>Action</th></tr></thead>
+                    <tbody id="packageTableBody"></tbody>
                 </table>
             </div>
         </div>
@@ -158,29 +141,19 @@
             <div class="header"><h1>Registered Users</h1></div>
             <div class="card">
                 <table>
-                    <thead>
-                        <tr>
-                            <th>User Info</th>
-                            <th>Status</th>
-                            <th>Expiry Date</th>
-                            <th>Qty</th>
-                        </tr>
-                    </thead>
-                    <tbody id="userTableBody">
-                        <tr><td colspan="4">Loading...</td></tr>
-                    </tbody>
+                    <thead><tr><th>User Info</th><th>Status</th><th>Expiry</th><th>Action (Approve Premium)</th></tr></thead>
+                    <tbody id="userTableBody"></tbody>
                 </table>
             </div>
         </div>
 
     </div>
 
-    <div id="toast" class="toast">Settings Saved!</div>
+    <div id="toast" class="toast">Done!</div>
 
     <script>
         const API = window.location.origin;
 
-        // Sidebar Tab Logic
         function openTab(tabId, btn) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -190,6 +163,7 @@
             if(tabId === 'tab-users') loadUsers();
             if(tabId === 'tab-packages') loadPackages();
             if(tabId === 'tab-settings') loadSettings();
+            if(tabId === 'tab-channels') loadChannels();
         }
 
         function showToast(msg, isError = false) {
@@ -200,7 +174,7 @@
             setTimeout(() => toast.style.display = 'none', 3000);
         }
 
-        // --- 1. Load & Save Settings ---
+        // --- 1. Settings ---
         async function loadSettings() {
             const res = await fetch(`${API}/api/admin/get-all-settings`);
             const data = await res.json();
@@ -209,40 +183,64 @@
             document.getElementById('usdt_bsc').value = data.usdt_bsc || '';
             document.getElementById('usdt_tron').value = data.usdt_tron || '';
         }
-
         async function saveSetting(key) {
-            const value = document.getElementById(key).value;
             await fetch(`${API}/api/admin/update-setting`, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ key, value })
+                body: JSON.stringify({ key, value: document.getElementById(key).value })
             });
-            showToast(`${key.toUpperCase()} Updated!`);
+            showToast('Updated!');
         }
-
         async function saveAllUsdt() {
-            const trc20 = document.getElementById('usdt_trc20').value;
-            const bsc = document.getElementById('usdt_bsc').value;
-            const tron = document.getElementById('usdt_tron').value;
-            
             await Promise.all([
-                fetch(`${API}/api/admin/update-setting`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ key: 'usdt_trc20', value: trc20 }) }),
-                fetch(`${API}/api/admin/update-setting`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ key: 'usdt_bsc', value: bsc }) }),
-                fetch(`${API}/api/admin/update-setting`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ key: 'usdt_tron', value: tron }) })
+                saveSetting('usdt_trc20'), saveSetting('usdt_bsc'), saveSetting('usdt_tron')
             ]);
-            showToast('All USDT Addresses Updated!');
+            showToast('All USDT Updated!');
         }
 
-        // --- 2. Packages ---
+        // --- 2. Channels ---
+        async function loadChannels() {
+            const res = await fetch(`${API}/api/admin/get-channels`);
+            const channels = await res.json();
+            const tbody = document.getElementById('channelTableBody');
+            tbody.innerHTML = channels.length ? '' : '<tr><td colspan="3">No channels added.</td></tr>';
+
+            channels.forEach(c => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>@${c.username}</td>
+                        <td>${c.quantity}</td>
+                        <td><button class="btn-danger" onclick="deleteChannel('${c.username}')">Delete</button></td>
+                    </tr>
+                `;
+            });
+        }
+        async function addChannel() {
+            const username = document.getElementById('chUsername').value.replace('@', '');
+            const quantity = document.getElementById('chQty').value;
+            if(!username || !quantity) return showToast('Fill all fields', true);
+
+            await fetch(`${API}/api/admin/add-channel`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ username, quantity })
+            });
+            document.getElementById('chUsername').value = '';
+            document.getElementById('chQty').value = '';
+            showToast('Channel Saved!');
+            loadChannels();
+        }
+        async function deleteChannel(username) {
+            if(!confirm('Delete this channel?')) return;
+            await fetch(`${API}/api/admin/delete-channel/${username}`, { method: 'DELETE' });
+            showToast('Channel Deleted!');
+            loadChannels();
+        }
+
+        // --- 3. Packages ---
         async function loadPackages() {
             const res = await fetch(`${API}/api/admin/get-packages`);
             const packages = await res.json();
             const tbody = document.getElementById('packageTableBody');
-            tbody.innerHTML = '';
-            
-            if (packages.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4">No packages found.</td></tr>';
-                return;
-            }
+            tbody.innerHTML = packages.length ? '' : '<tr><td colspan="4">No packages found.</td></tr>';
 
             packages.forEach(p => {
                 tbody.innerHTML += `
@@ -255,12 +253,11 @@
                 `;
             });
         }
-
         async function addPackage() {
             const name = document.getElementById('pkgName').value;
             const price = document.getElementById('pkgPrice').value;
             const days = document.getElementById('pkgDays').value;
-            if(!name || !price || !days) return showToast('Fill all fields!', true);
+            if(!name || !price || !days) return showToast('Fill all fields', true);
 
             await fetch(`${API}/api/admin/add-package`, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -272,7 +269,6 @@
             showToast('Package Added!');
             loadPackages();
         }
-
         async function deletePackage(id) {
             if(!confirm('Delete this package?')) return;
             await fetch(`${API}/api/admin/delete-package/${id}`, { method: 'DELETE' });
@@ -280,24 +276,18 @@
             loadPackages();
         }
 
-        // --- 3. Users & Stats ---
+        // --- 4. Users & Stats ---
         async function loadUsers() {
             const res = await fetch(`${API}/api/admin/get-users`);
             const users = await res.json();
             const tbody = document.getElementById('userTableBody');
-            tbody.innerHTML = '';
-
-            if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4">No users found.</td></tr>';
-                return;
-            }
+            tbody.innerHTML = users.length ? '' : '<tr><td colspan="4">No users found.</td></tr>';
 
             users.forEach(u => {
                 const isExpired = u.expiryDate && new Date(u.expiryDate) < new Date();
                 const status = (u.isPremium && !isExpired) 
                     ? '<span class="status-badge status-active">Active</span>' 
-                    : '<span class="status-badge status-expired">Expired / Free</span>';
-                
+                    : '<span class="status-badge status-expired">Free / Expired</span>';
                 const dateStr = u.expiryDate ? new Date(u.expiryDate).toLocaleDateString() : 'N/A';
 
                 tbody.innerHTML += `
@@ -305,10 +295,24 @@
                         <td><b>${u.firstName || 'User'}</b><br><small style="color:#94a3b8">ID: ${u.userId}</small></td>
                         <td>${status}</td>
                         <td>${dateStr}</td>
-                        <td>${u.quantity}</td>
+                        <td>
+                            <input type="number" id="days_${u.userId}" placeholder="Days" style="width: 60px; padding: 5px; margin-right: 5px; display:inline-block;">
+                            <button class="btn-approve" onclick="approveUser('${u.userId}')">Approve</button>
+                        </td>
                     </tr>
                 `;
             });
+        }
+        async function approveUser(userId) {
+            const days = document.getElementById(`days_${userId}`).value;
+            if(!days) return alert('Enter days first!');
+
+            await fetch(`${API}/api/admin/approve-user`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ userId, days })
+            });
+            showToast('User Approved!');
+            loadUsers();
         }
 
         async function loadStats() {
@@ -320,8 +324,6 @@
 
         // Init
         loadStats();
-        loadPackages();
-        loadSettings();
     </script>
 </body>
 </html>
