@@ -8,7 +8,7 @@ const basicAuth = require('express-basic-auth');
 
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public'))); // Dashboard serve karne ke liye
+app.use(express.static(path.join(__dirname, '../public')));
 
 // ==========================================
 // CONFIGURATION
@@ -33,7 +33,7 @@ const WEBHOOK_URL = process.env.RENDER_EXTERNAL_URL
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log('✅ Connected to MongoDB');
-    initDatabase(); // Sirf ek baar safe initialization karega
+    initDatabase();
   })
   .catch(err => console.log('❌ MongoDB Error:', err.message));
 
@@ -67,7 +67,6 @@ const Setting = mongoose.model('Setting', new mongoose.Schema({
 // SAFE INITIALIZATION (Data Reset Problem Solved)
 async function initDatabase() {
   try {
-    // Sirf tab add karega jab database bilkul khali ho
     const settingCount = await Setting.countDocuments();
     if (settingCount === 0) {
       await Setting.create([
@@ -114,9 +113,8 @@ async function placeOrder(link, quantity, apiKey) {
 }
 
 // ==========================================
-// 1. MASTER BOT (ADMIN BOT)
+// 1. MASTER BOT (Admin Bot & Normal User)
 // ==========================================
-// FIX: Admin Bot ko pehle initialize kiya gaya hai taaki ReferenceError na aaye
 const adminBot = new TelegramBot(MASTER_BOT_TOKEN, { polling: false });
 
 adminBot.setWebHook(`${WEBHOOK_URL}/webhook/admin`)
@@ -128,7 +126,7 @@ app.post('/webhook/admin', (req, res) => {
   res.sendStatus(200);
 });
 
-// Function to generate Welcome & Plans Menu dynamically
+// Welcome & Menu Function (Users ke liye)
 async function sendWelcomeMenu(chatId, firstName) {
   const welcomeText = `👋 <b>Hello ${firstName}!</b>\n\nThis is a premium telegram reaction bot. That's provides high quality reaction service. Buy the service packages given below 👇`;
   
@@ -142,18 +140,25 @@ async function sendWelcomeMenu(chatId, firstName) {
   await adminBot.sendMessage(chatId, welcomeText, menu).catch(() => {});
 }
 
+// START COMMAND
 adminBot.onText(/^\/start$/, async (msg) => {
   if (msg.from.id.toString() === SUPER_ADMIN_ID) {
-    const adminMenu = `👑 <b>Master Admin Panel</b>\n\n<b>Bot Commands:</b>\n/addchannel @channel\n/setqty @channel 50\n/approve &lt;user_id&gt; &lt;days&gt;\n/addbot &lt;user_id&gt; &lt;token&gt; &lt;apikey_or_none&gt; &lt;channel1,channel2&gt;\n\n<b>Web Dashboard:</b>\nApni website par /admin.html kholiye.`;
-    adminBot.sendMessage(msg.chat.id, adminMenu, { parse_mode: 'HTML' });
+    adminBot.sendMessage(msg.chat.id, `👑 <b>Welcome Admin!</b>\n\nAapke saare controls ab Web Dashboard par shift ho gaye hain.\n\n🌐 <b>Dashboard Link:</b>\n<a href="${WEBHOOK_URL}/admin.html">Open Admin Panel</a>`, { parse_mode: 'HTML', disable_web_page_preview: true });
   } else {
     sendWelcomeMenu(msg.chat.id, msg.from.first_name);
   }
 });
 
-// ... (Baki Admin Commands: addchannel, setqty, approve, addbot same rahenge) ...
+// ADMIN COMMAND ERROR MESSAGE
+adminBot.onText(/^\/admin$/, (msg) => {
+  if (msg.from.id.toString() !== SUPER_ADMIN_ID) {
+    adminBot.sendMessage(msg.chat.id, `❌ <b>YOU ARE NOT AN ADMIN, PLEASE USE /start TO USE BOT</b>`, { parse_mode: 'HTML' });
+  } else {
+    adminBot.sendMessage(msg.chat.id, `🌐 Aapka dashboard yahan hai: <a href="${WEBHOOK_URL}/admin.html">Click Here</a>`, { parse_mode: 'HTML' });
+  }
+});
 
-// USER CALLBACK QUERIES
+// USER CALLBACK QUERIES (Package Buy & Payment)
 adminBot.on('callback_query', async (query) => {
   const data = query.data;
   const chatId = query.message.chat.id;
@@ -207,7 +212,7 @@ adminBot.on('callback_query', async (query) => {
 
 
 // ==========================================
-// 2. CUSTOMER BOTS (Same as before)
+// 2. CUSTOMER BOTS (Dynamic)
 // ==========================================
 async function startCustomerBot(user) {
   if (!user.botToken || user.userId.toString() === SUPER_ADMIN_ID) return;
@@ -220,49 +225,55 @@ async function startCustomerBot(user) {
     bot.onText(/^\/start$/, (msg) => {
       bot.sendMessage(msg.chat.id, `👋 <b>Hello ${msg.from.first_name}!</b>\nUse /setqty to change.`, { parse_mode: 'HTML' });
     });
-    // ... (Customer logic same as before)
+    
+    bot.onText(/^\/setqty\s+(\d+)$/, async (msg, match) => {
+      const qty = parseInt(match[1], 10);
+      if (qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid quantity.');
+      await User.updateOne({ userId: user.userId }, { quantity: qty });
+      bot.sendMessage(msg.chat.id, `✅ Quantity updated to <b>${qty}</b>`, { parse_mode: 'HTML' });
+    });
+
+    bot.on('channel_post', async (msg) => {
+      const username = msg.chat.username?.toLowerCase();
+      if (!username) return;
+
+      const dbUser = await User.findOne({ userId: user.userId });
+      if (!dbUser.isPremium || dbUser.expiryDate < new Date()) return;
+      if (!dbUser.channels.includes(username)) return;
+
+      const link = `https://t.me/${username}/${msg.message_id}`;
+      const apiKeyToUse = dbUser.panelApiKey ? dbUser.panelApiKey : MASTER_API_KEY;
+      const result = await placeOrder(link, dbUser.quantity, apiKeyToUse);
+      
+      if (result.ok) console.log(`✅ [Customer ${user.userId}] Success: ${link}`);
+      else bot.sendMessage(user.userId, `❌ Order failed for ${link}`).catch(()=>{});
+    });
   } catch (err) { console.log(`❌ Bot Error ${user.userId}:`, err.message); }
 }
+
+app.post('/webhook/:userId', (req, res) => {
+  const userId = req.params.userId;
+  if (activeBots[userId]) {
+    activeBots[userId].processUpdate(req.body);
+  }
+  res.sendStatus(200);
+});
 
 
 // ==========================================
 // 3. ADVANCED ADMIN WEB DASHBOARD API ROUTES
 // ==========================================
-// Dashboard ko password se protect kiya (admin / admin123)
 app.use('/admin.html', basicAuth({ users: { 'admin': 'admin123' }, challenge: true, realm: 'AdminPanel' }));
-// Naya Route: Saare users ki list dekhne ke liye
-app.get('/api/admin/get-users', async (req, res) => {
-  try {
-    // Sirf zaroori fields fetch kar rahe hain
-    const users = await User.find({}, 'userId firstName isPremium expiryDate quantity').sort({ _id: -1 });
-    res.json(users);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
-// Naya Route: Saari settings (UPI + USDT) ek saath lene ke liye
 app.get('/api/admin/get-all-settings', async (req, res) => {
   try {
     const settings = await Setting.find({});
     let data = { upi_id: '', usdt_trc20: '', usdt_bsc: '', usdt_tron: '' };
     settings.forEach(s => { if(data[s.key] !== undefined) data[s.key] = s.value; });
     res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Get Settings
-app.get('/api/admin/get-settings', async (req, res) => {
-  try {
-    const upi = await Setting.findOne({ key: 'upi_id' });
-    const trc20 = await Setting.findOne({ key: 'usdt_trc20' });
-    res.json({ upi: upi?.value || '', trc20: trc20?.value || '' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Update Settings
 app.post('/api/admin/update-setting', async (req, res) => {
   const { key, value } = req.body;
   try {
@@ -271,7 +282,6 @@ app.post('/api/admin/update-setting', async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
-// Get Packages List
 app.get('/api/admin/get-packages', async (req, res) => {
   try {
     const packages = await Package.find({});
@@ -279,7 +289,6 @@ app.get('/api/admin/get-packages', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Add Package
 app.post('/api/admin/add-package', async (req, res) => {
   const { name, price, days } = req.body;
   try {
@@ -288,7 +297,6 @@ app.post('/api/admin/add-package', async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
-// Delete Package
 app.delete('/api/admin/delete-package/:id', async (req, res) => {
   try {
     await Package.findByIdAndDelete(req.params.id);
@@ -296,12 +304,50 @@ app.delete('/api/admin/delete-package/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
-// Get Stats (Total Users, Premium Users)
 app.get('/api/admin/stats', async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
     const premiumUsers = await User.countDocuments({ isPremium: true });
     res.json({ totalUsers, premiumUsers });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/admin/get-users', async (req, res) => {
+  try {
+    const users = await User.find({}, 'userId firstName isPremium expiryDate quantity').sort({ _id: -1 });
+    res.json(users);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/admin/get-channels', async (req, res) => {
+  const channels = await AdminChannel.find({});
+  res.json(channels);
+});
+
+app.post('/api/admin/add-channel', async (req, res) => {
+  const { username, quantity } = req.body;
+  try {
+    await AdminChannel.findOneAndUpdate(
+      { username: username.toLowerCase() }, 
+      { quantity: parseInt(quantity) }, 
+      { upsert: true }
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/admin/delete-channel/:username', async (req, res) => {
+  await AdminChannel.findOneAndDelete({ username: req.params.username });
+  res.json({ success: true });
+});
+
+app.post('/api/admin/approve-user', async (req, res) => {
+  const { userId, days } = req.body;
+  const expiry = new Date();
+  expiry.setDate(expiry.getDate() + parseInt(days));
+  try {
+    await User.findOneAndUpdate({ userId: userId }, { isPremium: true, expiryDate: expiry }, { upsert: true });
+    res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -313,7 +359,6 @@ app.get('/', (req, res) => res.send('Bot is running!'));
 
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  // Bots ko reconnect karein
   const usersWithBots = await User.find({ botToken: { $ne: null }, isPremium: true });
   for (const user of usersWithBots) {
     await startCustomerBot(user);
