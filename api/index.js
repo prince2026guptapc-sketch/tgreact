@@ -291,7 +291,7 @@ adminBot.on('message', async (msg) => {
         ]
       }
     };
-    adminBot.sendMessage(chatId, `✅ <b>Your Order:</b>\nQuantity: ${qty}\nPrice: ₹${price}\n\nChoose payment method:`, { parse_mode: 'HTML', ...payKeyboard });
+    adminBot.sendMessage(chatId, `✅ <b>Your Order:</b>\nReaction Quantity: ${qty}\nPrice: ₹${price}\n\nChoose payment method:`, { parse_mode: 'HTML', ...payKeyboard });
   }
 });
 
