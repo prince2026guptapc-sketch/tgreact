@@ -75,7 +75,7 @@ async function initDatabase() {
         { key: 'usdt_tron', value: 'YOUR_TRON_ADDRESS' },
         { key: 'admin_username', value: 'admin' },
         { key: 'admin_password', value: 'admin123' },
-        { key: 'custom_rate', value: '50' } // ₹50 per 1000 views
+        { key: 'custom_rate', value: '16' } // ₹16 per 1000 reaction
       ]);
       console.log('✅ Default Settings Created');
     }
@@ -130,13 +130,13 @@ app.post('/webhook/admin', (req, res) => {
 });
 
 async function sendWelcomeMenu(chatId, firstName) {
-  const welcomeText = `👋 <b>Hello ${firstName}!</b>\n\nThis is a premium telegram reaction bot. Buy packages or create a custom order.`;
+  const welcomeText = `👋 <b>Hello ${firstName}!</b>\n\nThis is a premium telegram reaction bot. Buy coustum reaction packages. Price started from 14rs/1000 reaction`;
   const packages = await Package.find({});
   
   const keyboard = packages.map(p => [{ text: `📅 ${p.name} - ₹${p.price}`, callback_data: `buy_pkg_${p._id}` }]);
   
   // 🆕 Custom Order button
-  keyboard.push([{ text: '⚙️ Custom Order (Choose your own quantity)', callback_data: 'custom_order' }]);
+  keyboard.push([{ text: '⚙️ Custom reaction Order (Choose your own quantity)', callback_data: 'custom_order' }]);
   
   const menu = { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'HTML' };
   await adminBot.sendMessage(chatId, welcomeText, menu).catch(() => {});
