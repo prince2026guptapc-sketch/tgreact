@@ -89,21 +89,25 @@ async function initDatabase() {
 }
 
 // ==========================================
-// HELPERS
+// HELPERS & SMM PANEL API
 // ==========================================
 const activeBots = {}; 
 
 async function placeOrder(link, quantity, apiKey) {
   try {
+    console.log(`Attempting order: ${link} | Qty: ${quantity}`);
     const { data } = await axios.post(PANEL_URL, { 
       key: apiKey, action: 'add', service: SERVICE_ID, link: link, quantity: quantity 
-    }, { timeout: 8000 });
+    }, { timeout: 10000 });
+    
     if (data?.error) throw new Error(data.error);
     if (!data?.order) throw new Error('No order ID received');
+    
+    console.log(`✅ Panel Success: Order ID ${data.order}`);
     return { ok: true, orderId: data.order };
   } catch (err) { 
-    console.log(`❌ Panel Error (${link}): ${err.message}`);
-    return { ok: false };
+    console.log(`❌ Panel Error: ${err.message}`);
+    return { ok: false, error: err.message };
   }
 }
 
@@ -134,6 +138,8 @@ adminBot.onText(/^\/start$/, async (msg) => {
   if (msg.from.id.toString() === SUPER_ADMIN_ID) {
     adminBot.sendMessage(msg.chat.id, `👑 <b>Welcome Admin!</b>\n\nUse /admin to open your dashboard.`, { parse_mode: 'HTML' });
   } else {
+    // Customer ke liye default qty set karna
+    await User.findOneAndUpdate({ userId: msg.from.id.toString() }, { firstName: msg.from.first_name }, { upsert: true });
     sendWelcomeMenu(msg.chat.id, msg.from.first_name);
   }
 });
@@ -155,6 +161,21 @@ adminBot.onText(/^\/admin$/, (msg) => {
   adminBot.sendMessage(msg.chat.id, `👑 <b>Welcome Admin!</b>\n\nClick below to open your dashboard.`, { parse_mode: 'HTML', ...miniAppMenu });
 });
 
+// Master Bot: Admin Channels Order Logic
+adminBot.on('channel_post', async (msg) => {
+  const username = msg.chat.username?.toLowerCase();
+  if (!username) return;
+  
+  const adminChannel = await AdminChannel.findOne({ username });
+  if (!adminChannel) return;
+
+  const link = `https://t.me/${username}/${msg.message_id}`;
+  const result = await placeOrder(link, adminChannel.quantity, MASTER_API_KEY);
+  if (result.ok) console.log(`✅ [Admin] Success: ${link}`);
+  else adminBot.sendMessage(SUPER_ADMIN_ID, `❌ Admin Order Failed: ${link}`).catch(()=>{});
+});
+
+// User Callback Queries (Payment logic)
 adminBot.on('callback_query', async (query) => {
   const data = query.data;
   const chatId = query.message.chat.id;
@@ -204,40 +225,58 @@ adminBot.on('callback_query', async (query) => {
 });
 
 // ==========================================
-// 2. CUSTOMER BOTS (Dynamic)
+// 2. CUSTOMER BOTS (Dynamic Bots with /setqty & Ordering)
 // ==========================================
 async function startCustomerBot(user) {
   if (!user.botToken || user.userId.toString() === SUPER_ADMIN_ID) return;
+  
   try {
     const bot = new TelegramBot(user.botToken, { polling: false });
     const botPath = `/webhook/${user.userId}`;
     await bot.setWebHook(`${WEBHOOK_URL}${botPath}`);
     activeBots[user.userId] = bot;
 
-    bot.onText(/^\/start$/, (msg) => {
-      bot.sendMessage(msg.chat.id, `👋 <b>Hello ${msg.from.first_name}!</b>\nUse /setqty to change.`, { parse_mode: 'HTML' });
+    // 1. Customer Start & Menu
+    bot.onText(/^\/start$/, async (msg) => {
+      bot.sendMessage(msg.chat.id, `👋 <b>Hello ${msg.from.first_name}!</b>\n\nAap apne channel par orders lene ke liye taiyar hain.\n\nUse <code>/setqty 50</code> to change order quantity.\n\nAfter payment, send screenshot to ${SUPER_ADMIN_USERNAME}.`, { parse_mode: 'HTML' });
     });
     
+    // 2. Customer Set Qty Command
     bot.onText(/^\/setqty\s+(\d+)$/, async (msg, match) => {
       const qty = parseInt(match[1], 10);
-      if (qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid quantity.');
+      if (qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid quantity. Must be greater than 0.');
+      
       await User.updateOne({ userId: user.userId }, { quantity: qty });
-      bot.sendMessage(msg.chat.id, `✅ Quantity updated to <b>${qty}</b>`, { parse_mode: 'HTML' });
+      bot.sendMessage(msg.chat.id, `✅ Quantity updated to <b>${qty}</b> for all your channels.`, { parse_mode: 'HTML' });
     });
 
+    // 3. Customer Channel Order Logic
     bot.on('channel_post', async (msg) => {
       const username = msg.chat.username?.toLowerCase();
       if (!username) return;
+
       const dbUser = await User.findOne({ userId: user.userId });
-      if (!dbUser.isPremium || dbUser.expiryDate < new Date()) return;
+      
+      // Check Premium Expiry
+      if (!dbUser.isPremium || (dbUser.expiryDate && dbUser.expiryDate < new Date())) {
+        console.log(`⚠️ User ${user.userId} is expired. Order skipped.`);
+        return;
+      }
+      
+      // Check if channel is in their list
       if (!dbUser.channels.includes(username)) return;
 
       const link = `https://t.me/${username}/${msg.message_id}`;
       const apiKeyToUse = dbUser.panelApiKey ? dbUser.panelApiKey : MASTER_API_KEY;
+      
+      console.log(`[Customer Bot] Placing order for ${username} | Qty: ${dbUser.quantity}`);
       const result = await placeOrder(link, dbUser.quantity, apiKeyToUse);
       
-      if (result.ok) console.log(`✅ [Customer ${user.userId}] Success: ${link}`);
-      else bot.sendMessage(user.userId, `❌ Order failed for ${link}`).catch(()=>{});
+      if (result.ok) {
+        console.log(`✅ [Customer ${user.userId}] Success: ${link}`);
+      } else {
+        bot.sendMessage(user.userId, `❌ Order failed for ${link}\nReason: ${result.error}`).catch(()=>{});
+      }
     });
   } catch (err) { console.log(`❌ Bot Error ${user.userId}:`, err.message); }
 }
