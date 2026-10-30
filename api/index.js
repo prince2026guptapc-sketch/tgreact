@@ -241,7 +241,7 @@ adminBot.on('callback_query', async (query) => {
     const upiUrl = `upi://pay?pa=${upiId}&pn=PremiumBot&am=${price}&cu=INR&tn=Bot_Custom_${query.from.id}`;
     const qrBuffer = await QRCode.toBuffer(upiUrl);
     adminBot.sendPhoto(chatId, qrBuffer, { 
-      caption: `✅ <b>Custom Order: ${qty} views</b>\nPrice: ₹${price}\n\nScan & pay to UPI:\n<code>${upiId}</code>\n\nSend screenshot to ${SUPER_ADMIN_USERNAME}`, 
+      caption: `✅ <b>Custom Order: ${qty} Reaction</b>\nPrice: ₹${price}\n\nScan & pay to UPI:\n<code>${upiId}</code>\n\nSend screenshot to ${SUPER_ADMIN_USERNAME}`, 
       parse_mode: 'HTML' 
     });
   }
