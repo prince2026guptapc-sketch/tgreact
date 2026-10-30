@@ -51,12 +51,14 @@ const AdminChannel = mongoose.model('AdminChannel', new mongoose.Schema({
   quantity: { type: Number, default: 10 }
 }));
 
-// Naya Package Model (Custom Logic)
+// Updated Package Model
 const Package = mongoose.model('Package', new mongoose.Schema({
   name: { type: String, required: true },
-  quantity: { type: Number, required: true },
+  posts: { type: Number, required: true },
+  reactionsPerPost: { type: Number, required: true },
+  quantity: { type: Number, required: true }, // Total quantity (posts * reactionsPerPost)
   days: { type: Number, required: true },
-  price: { type: Number, required: true } // Auto calculated
+  price: { type: Number, required: true }
 }));
 
 const Setting = mongoose.model('Setting', new mongoose.Schema({
@@ -81,11 +83,10 @@ async function initDatabase() {
     }
     const packCount = await Package.countDocuments();
     if (packCount === 0) {
-      // Default packages: 1 week, 1000 reactions = 13rs
+      // Default packages: 10 posts, 1000 reactions per post = 10000 total
       await Package.create([
-        { name: '1 Week', quantity: 1000, days: 7, price: 13 },
-        { name: '1 Month', quantity: 5000, days: 30, price: 65 },
-        { name: '6 Months', quantity: 10000, days: 180, price: 130 }
+        { name: 'Starter Pack [10 Post]', posts: 10, reactionsPerPost: 1000, quantity: 10000, days: 7, price: 130 },
+        { name: 'Pro Pack [50 Post]', posts: 50, reactionsPerPost: 1000, quantity: 50000, days: 30, price: 650 }
       ]);
       console.log('✅ Default Packages Created');
     }
@@ -324,14 +325,20 @@ app.get('/api/admin/get-packages', async (req, res) => {
 
 // NAYA LOGIC: Custom Package Auto Price Calculation
 app.post('/api/admin/add-package', async (req, res) => {
-  const { name, quantity, days } = req.body;
+  const { name, posts, reactionsPerPost, days } = req.body;
   try {
-    const qtyNum = parseInt(quantity, 10);
-    const autoPrice = (qtyNum / 1000) * REACTION_PRICE_PER_1000; // ₹13 per 1000
+    const postsNum = parseInt(posts, 10);
+    const rxnsNum = parseInt(reactionsPerPost, 10);
+    const totalQuantity = postsNum * rxnsNum;
+    
+    // Formula: (Total Reactions / 1000) * 13
+    const autoPrice = (totalQuantity / 1000) * REACTION_PRICE_PER_1000; 
     
     await Package.create({ 
       name: name, 
-      quantity: qtyNum, 
+      posts: postsNum,
+      reactionsPerPost: rxnsNum,
+      quantity: totalQuantity, 
       days: parseInt(days, 10), 
       price: Math.ceil(autoPrice) // Round off to nearest rupee
     });
