@@ -58,6 +58,7 @@ async function loadSettings() {
     document.getElementById('usdt_trc20').value = data.usdt_trc20 || '';
     document.getElementById('usdt_bsc').value = data.usdt_bsc || '';
     document.getElementById('usdt_tron').value = data.usdt_tron || '';
+    document.getElementById('custom_rate').value = data.custom_rate || '';
 }
 
 async function saveSetting(key, btnId) {
