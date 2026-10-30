@@ -134,7 +134,7 @@ async function deleteChannel(username) {
     loadChannels();
 }
 
-// --- 3. Packages (Custom Logic Updated) ---
+// --- 3. Packages (Custom Logic FIXED) ---
 async function loadPackages() {
     const res = await fetch(`${API}/api/admin/get-packages`);
     const packages = await res.json();
@@ -162,20 +162,43 @@ async function addPackage() {
     const reactionsPerPost = document.getElementById('pkgReactionsPerPost').value;
     const days = document.getElementById('pkgDays').value;
     
-    if(!name || !posts || !reactionsPerPost || !days) return showToast('Fill all fields', true);
+    if(!name || !posts || !reactionsPerPost || !days) {
+        return showToast('Please fill all fields correctly!', true);
+    }
 
-    await fetch(`${API}/api/admin/add-package`, {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ name, posts, reactionsPerPost, days })
-    });
-    
-    document.getElementById('pkgName').value = '';
-    document.getElementById('pkgPosts').value = '';
-    document.getElementById('pkgReactionsPerPost').value = '';
-    document.getElementById('pkgDays').value = '';
-    
-    showTick('btn-addpackage', 'Add Package');
-    loadPackages();
+    const btn = document.getElementById('btn-addpackage');
+    btn.innerText = 'Adding...';
+
+    try {
+        const res = await fetch(`${API}/api/admin/add-package`, {
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                name: name, 
+                posts: parseInt(posts), 
+                reactionsPerPost: parseInt(reactionsPerPost), 
+                days: parseInt(days) 
+            })
+        });
+
+        const data = await res.json();
+
+        if(data.success) {
+            document.getElementById('pkgName').value = '';
+            document.getElementById('pkgPosts').value = '';
+            document.getElementById('pkgReactionsPerPost').value = '';
+            document.getElementById('pkgDays').value = '';
+            showTick('btn-addpackage', 'Add Package');
+            loadPackages();
+        } else {
+            showToast('Error: ' + (data.error || 'Server error'), true);
+            btn.innerText = 'Add Package';
+        }
+    } catch (err) {
+        showToast('Network Error. Check console.', true);
+        btn.innerText = 'Add Package';
+        console.error(err);
+    }
 }
 
 async function deletePackage(id) {
