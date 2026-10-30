@@ -134,17 +134,19 @@ async function deleteChannel(username) {
     loadChannels();
 }
 
-// --- 3. Packages (Custom Logic) ---
+// --- 3. Packages (Custom Logic Updated) ---
 async function loadPackages() {
     const res = await fetch(`${API}/api/admin/get-packages`);
     const packages = await res.json();
     const tbody = document.getElementById('packageTableBody');
-    tbody.innerHTML = packages.length ? '' : '<tr><td colspan="5">No packages found.</td></tr>';
+    tbody.innerHTML = packages.length ? '' : '<tr><td colspan="7">No packages found.</td></tr>';
     
     packages.forEach(p => {
         tbody.innerHTML += `
             <tr>
                 <td><b>${p.name}</b></td>
+                <td>${p.posts}</td>
+                <td>${p.reactionsPerPost}</td>
                 <td>${p.quantity}</td>
                 <td>₹${p.price}</td>
                 <td>${p.days} days</td>
@@ -156,18 +158,20 @@ async function loadPackages() {
 
 async function addPackage() {
     const name = document.getElementById('pkgName').value;
-    const quantity = document.getElementById('pkgQuantity').value;
+    const posts = document.getElementById('pkgPosts').value;
+    const reactionsPerPost = document.getElementById('pkgReactionsPerPost').value;
     const days = document.getElementById('pkgDays').value;
     
-    if(!name || !quantity || !days) return showToast('Fill all fields', true);
+    if(!name || !posts || !reactionsPerPost || !days) return showToast('Fill all fields', true);
 
     await fetch(`${API}/api/admin/add-package`, {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ name, quantity, days })
+        body: JSON.stringify({ name, posts, reactionsPerPost, days })
     });
     
     document.getElementById('pkgName').value = '';
-    document.getElementById('pkgQuantity').value = '';
+    document.getElementById('pkgPosts').value = '';
+    document.getElementById('pkgReactionsPerPost').value = '';
     document.getElementById('pkgDays').value = '';
     
     showTick('btn-addpackage', 'Add Package');
