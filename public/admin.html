@@ -95,19 +95,22 @@
             <div class="header"><h1>Custom Packages</h1></div>
             <div class="card">
                 <h3>Create Custom Package</h3>
-                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Price is auto-calculated at <b>₹13 per 1000 reactions</b>.</p>
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Price is auto-calculated at <b>₹13 per 1000 reactions per post</b>.</p>
                 <div class="grid-2">
-                    <div class="form-group"><label>Package Name</label><input type="text" id="pkgName" placeholder="e.g. Pro Pack"></div>
-                    <div class="form-group"><label>Total Reactions (Quantity)</label><input type="number" id="pkgQuantity" placeholder="e.g. 1000"></div>
+                    <div class="form-group"><label>Package Name</label><input type="text" id="pkgName" placeholder="e.g. Starter Pack [10 Post]"></div>
+                    <div class="form-group"><label>Number of Posts</label><input type="number" id="pkgPosts" placeholder="e.g. 10"></div>
                 </div>
-                <div class="form-group"><label>Duration (Days)</label><input type="number" id="pkgDays" placeholder="e.g. 7"></div>
+                <div class="grid-2">
+                    <div class="form-group"><label>Reactions per Post</label><input type="number" id="pkgReactionsPerPost" placeholder="e.g. 1000"></div>
+                    <div class="form-group"><label>Duration (Days)</label><input type="number" id="pkgDays" placeholder="e.g. 7"></div>
+                </div>
                 <button id="btn-addpackage" onclick="addPackage()">Add Package</button>
             </div>
             <div class="card">
                 <h3>Active Packages</h3>
                 <table>
-                    <thead><tr><th>Name</th><th>Reactions</th><th>Price</th><th>Days</th><th>Action</th></tr></thead>
-                    <tbody id="packageTableBody"><tr><td colspan="5">Loading...</td></tr></tbody>
+                    <thead><tr><th>Name</th><th>Posts</th><th>Reactions/Post</th><th>Total Quantity</th><th>Price</th><th>Days</th><th>Action</th></tr></thead>
+                    <tbody id="packageTableBody"><tr><td colspan="7">Loading...</td></tr></tbody>
                 </table>
             </div>
         </div>
