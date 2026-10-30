@@ -41,7 +41,10 @@ const User = mongoose.model('User', new mongoose.Schema({
   botToken: { type: String, default: null }, 
   panelApiKey: { type: String, default: null }, 
   channels: { type: [String], default: [] },
-  quantity: { type: Number, default: 10 }
+  quantity: { type: Number, default: 10 },
+  // 🆕 Custom Order fields
+  waitingForCustomQty: { type: Boolean, default: false },
+  customQty: { type: Number, default: null }
 }));
 
 const AdminChannel = mongoose.model('AdminChannel', new mongoose.Schema({
@@ -71,7 +74,8 @@ async function initDatabase() {
         { key: 'usdt_bsc', value: 'YOUR_BSC_ADDRESS' },
         { key: 'usdt_tron', value: 'YOUR_TRON_ADDRESS' },
         { key: 'admin_username', value: 'admin' },
-        { key: 'admin_password', value: 'admin123' }
+        { key: 'admin_password', value: 'admin123' },
+        { key: 'custom_rate', value: '50' } // ₹50 per 1000 views
       ]);
       console.log('✅ Default Settings Created');
     }
@@ -126,10 +130,14 @@ app.post('/webhook/admin', (req, res) => {
 });
 
 async function sendWelcomeMenu(chatId, firstName) {
-  const welcomeText = `👋 <b>Hello ${firstName}!</b>\n\nThis is a premium telegram reaction bot. That's provides high quality reaction service. Buy the service packages given below 👇`;
+  const welcomeText = `👋 <b>Hello ${firstName}!</b>\n\nThis is a premium telegram reaction bot. Buy packages or create a custom order.`;
   const packages = await Package.find({});
-  if (packages.length === 0) return adminBot.sendMessage(chatId, "❌ No packages available right now.");
+  
   const keyboard = packages.map(p => [{ text: `📅 ${p.name} - ₹${p.price}`, callback_data: `buy_pkg_${p._id}` }]);
+  
+  // 🆕 Custom Order button
+  keyboard.push([{ text: '⚙️ Custom Order (Choose your own quantity)', callback_data: 'custom_order' }]);
+  
   const menu = { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'HTML' };
   await adminBot.sendMessage(chatId, welcomeText, menu).catch(() => {});
 }
@@ -138,8 +146,7 @@ adminBot.onText(/^\/start$/, async (msg) => {
   if (msg.from.id.toString() === SUPER_ADMIN_ID) {
     adminBot.sendMessage(msg.chat.id, `👑 <b>Welcome Admin!</b>\n\nUse /admin to open your dashboard.`, { parse_mode: 'HTML' });
   } else {
-    // Customer ke liye default qty set karna
-    await User.findOneAndUpdate({ userId: msg.from.id.toString() }, { firstName: msg.from.first_name }, { upsert: true });
+    await User.findOneAndUpdate({ userId: msg.from.id.toString() }, { firstName: msg.from.first_name, waitingForCustomQty: false }, { upsert: true });
     sendWelcomeMenu(msg.chat.id, msg.from.first_name);
   }
 });
@@ -175,7 +182,7 @@ adminBot.on('channel_post', async (msg) => {
   else adminBot.sendMessage(SUPER_ADMIN_ID, `❌ Admin Order Failed: ${link}`).catch(()=>{});
 });
 
-// User Callback Queries (Payment logic)
+// User Callback Queries (Payment & Custom Order logic)
 adminBot.on('callback_query', async (query) => {
   const data = query.data;
   const chatId = query.message.chat.id;
@@ -218,14 +225,78 @@ adminBot.on('callback_query', async (query) => {
     adminBot.sendMessage(chatId, text, { parse_mode: 'HTML' });
   }
 
+  // 🆕 CUSTOM QUANTITY LOGIC
+  if (data === 'custom_order') {
+    adminBot.answerCallbackQuery(query.id);
+    await User.findOneAndUpdate({ userId: query.from.id.toString() }, { waitingForCustomQty: true }, { upsert: true });
+    adminBot.sendMessage(chatId, `🔢 <b>Custom Order</b>\n\nPlease send the quantity you want (e.g., 5000 views).\n\n<i>You can cancel this by sending /start</i>`, { parse_mode: 'HTML' });
+  }
+
+  if (data.startsWith('pay_custom_upi_')) {
+    const parts = data.split('_');
+    const qty = parts[3];
+    const price = parts[4];
+    const upiSetting = await Setting.findOne({ key: 'upi_id' });
+    const upiId = upiSetting ? upiSetting.value : 'not_set';
+    const upiUrl = `upi://pay?pa=${upiId}&pn=PremiumBot&am=${price}&cu=INR&tn=Bot_Custom_${query.from.id}`;
+    const qrBuffer = await QRCode.toBuffer(upiUrl);
+    adminBot.sendPhoto(chatId, qrBuffer, { 
+      caption: `✅ <b>Custom Order: ${qty} views</b>\nPrice: ₹${price}\n\nScan & pay to UPI:\n<code>${upiId}</code>\n\nSend screenshot to ${SUPER_ADMIN_USERNAME}`, 
+      parse_mode: 'HTML' 
+    });
+  }
+
+  if (data.startsWith('pay_custom_usdt_')) {
+    const parts = data.split('_');
+    const qty = parts[3];
+    const price = parts[4];
+    const trc20 = await Setting.findOne({ key: 'usdt_trc20' });
+    const bsc = await Setting.findOne({ key: 'usdt_bsc' });
+    const tron = await Setting.findOne({ key: 'usdt_tron' });
+    const text = `✅ <b>Custom Order: ${qty} views</b>\nPrice: ₹${price}\n\n<b>TRC20:</b>\n<code>${trc20 ? trc20.value : 'N/A'}</code>\n\n<b>BSC:</b>\n<code>${bsc ? bsc.value : 'N/A'}</code>\n\n<b>TRON:</b>\n<code>${tron ? tron.value : 'N/A'}</code>\n\n⚠️ Send correct network. Screenshot to ${SUPER_ADMIN_USERNAME}`;
+    adminBot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+  }
+
   if (data === 'back_to_menu') {
     adminBot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
     sendWelcomeMenu(chatId, query.from.first_name);
   }
 });
 
+// 🆕 User Message Handler (Custom Qty Input)
+adminBot.on('message', async (msg) => {
+  if (!msg.text || msg.text.startsWith('/')) return;
+  const chatId = msg.chat.id;
+  const userId = msg.from.id.toString();
+  const user = await User.findOne({ userId });
+  
+  if (user && user.waitingForCustomQty) {
+    const qty = parseInt(msg.text);
+    if (isNaN(qty) || qty < 1) {
+      return adminBot.sendMessage(chatId, `❌ Invalid quantity. Please send a number like 1000.`);
+    }
+    
+    const rateSetting = await Setting.findOne({ key: 'custom_rate' });
+    const rate = rateSetting ? parseFloat(rateSetting.value) : 50;
+    const price = Math.ceil((qty / 1000) * rate);
+    
+    await User.updateOne({ userId }, { waitingForCustomQty: false, customQty: qty });
+    
+    const payKeyboard = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '💳 Pay via UPI', callback_data: `pay_custom_upi_${qty}_${price}` }],
+          [{ text: '🪙 Pay via USDT', callback_data: `pay_custom_usdt_${qty}_${price}` }],
+          [{ text: '⬅️ Back', callback_data: 'back_to_menu' }]
+        ]
+      }
+    };
+    adminBot.sendMessage(chatId, `✅ <b>Your Order:</b>\nQuantity: ${qty}\nPrice: ₹${price}\n\nChoose payment method:`, { parse_mode: 'HTML', ...payKeyboard });
+  }
+});
+
 // ==========================================
-// 2. CUSTOMER BOTS (Dynamic Bots with /setqty & Ordering)
+// 2. CUSTOMER BOTS (Dynamic Bots)
 // ==========================================
 async function startCustomerBot(user) {
   if (!user.botToken || user.userId.toString() === SUPER_ADMIN_ID) return;
@@ -236,47 +307,30 @@ async function startCustomerBot(user) {
     await bot.setWebHook(`${WEBHOOK_URL}${botPath}`);
     activeBots[user.userId] = bot;
 
-    // 1. Customer Start & Menu
     bot.onText(/^\/start$/, async (msg) => {
-      bot.sendMessage(msg.chat.id, `👋 <b>Hello ${msg.from.first_name}!</b>\n\nAap apne channel par orders lene ke liye taiyar hain.\n\nUse <code>/setqty 50</code> to change order quantity.\n\nAfter payment, send screenshot to ${SUPER_ADMIN_USERNAME}.`, { parse_mode: 'HTML' });
+      bot.sendMessage(msg.chat.id, `👋 <b>Hello ${msg.from.first_name}!</b>\n\nUse <code>/setqty 50</code> to change order quantity.\n\nAfter payment, send screenshot to ${SUPER_ADMIN_USERNAME}.`, { parse_mode: 'HTML' });
     });
     
-    // 2. Customer Set Qty Command
     bot.onText(/^\/setqty\s+(\d+)$/, async (msg, match) => {
       const qty = parseInt(match[1], 10);
-      if (qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid quantity. Must be greater than 0.');
-      
+      if (qty < 1) return bot.sendMessage(msg.chat.id, '❌ Invalid quantity.');
       await User.updateOne({ userId: user.userId }, { quantity: qty });
       bot.sendMessage(msg.chat.id, `✅ Quantity updated to <b>${qty}</b> for all your channels.`, { parse_mode: 'HTML' });
     });
 
-    // 3. Customer Channel Order Logic
     bot.on('channel_post', async (msg) => {
       const username = msg.chat.username?.toLowerCase();
       if (!username) return;
-
       const dbUser = await User.findOne({ userId: user.userId });
-      
-      // Check Premium Expiry
-      if (!dbUser.isPremium || (dbUser.expiryDate && dbUser.expiryDate < new Date())) {
-        console.log(`⚠️ User ${user.userId} is expired. Order skipped.`);
-        return;
-      }
-      
-      // Check if channel is in their list
+      if (!dbUser.isPremium || (dbUser.expiryDate && dbUser.expiryDate < new Date())) return;
       if (!dbUser.channels.includes(username)) return;
 
       const link = `https://t.me/${username}/${msg.message_id}`;
       const apiKeyToUse = dbUser.panelApiKey ? dbUser.panelApiKey : MASTER_API_KEY;
-      
-      console.log(`[Customer Bot] Placing order for ${username} | Qty: ${dbUser.quantity}`);
       const result = await placeOrder(link, dbUser.quantity, apiKeyToUse);
       
-      if (result.ok) {
-        console.log(`✅ [Customer ${user.userId}] Success: ${link}`);
-      } else {
-        bot.sendMessage(user.userId, `❌ Order failed for ${link}\nReason: ${result.error}`).catch(()=>{});
-      }
+      if (result.ok) console.log(`✅ [Customer ${user.userId}] Success: ${link}`);
+      else bot.sendMessage(user.userId, `❌ Order failed for ${link}\nReason: ${result.error}`).catch(()=>{});
     });
   } catch (err) { console.log(`❌ Bot Error ${user.userId}:`, err.message); }
 }
@@ -315,7 +369,7 @@ app.post('/api/admin/change-password', async (req, res) => {
 app.get('/api/admin/get-all-settings', async (req, res) => {
   try {
     const settings = await Setting.find({});
-    let data = { upi_id: '', usdt_trc20: '', usdt_bsc: '', usdt_tron: '' };
+    let data = { upi_id: '', usdt_trc20: '', usdt_bsc: '', usdt_tron: '', custom_rate: '' };
     settings.forEach(s => { if(data[s.key] !== undefined) data[s.key] = s.value; });
     res.json(data);
   } catch (err) { res.status(500).json({ error: err.message }); }
