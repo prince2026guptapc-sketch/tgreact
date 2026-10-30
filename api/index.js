@@ -229,7 +229,7 @@ adminBot.on('callback_query', async (query) => {
   if (data === 'custom_order') {
     adminBot.answerCallbackQuery(query.id);
     await User.findOneAndUpdate({ userId: query.from.id.toString() }, { waitingForCustomQty: true }, { upsert: true });
-    adminBot.sendMessage(chatId, `🔢 <b>Custom Order</b>\n\nPlease send the quantity you want (e.g., 5000 reaction).\n\n<i>You can cancel this by sending /start</i>`, { parse_mode: 'HTML' });
+    adminBot.sendMessage(chatId, `🔢 <b>Custom Order</b>\n\nPlease send the quantity you want (e.g., 5000 reaction). vaild for single day only\n\n<i>You can cancel this by sending /start</i>`, { parse_mode: 'HTML' });
   }
 
   if (data.startsWith('pay_custom_upi_')) {
