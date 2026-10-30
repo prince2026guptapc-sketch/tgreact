@@ -76,12 +76,12 @@
 
             <!-- Custom Pricing -->
             <div class="card">
-                <h3>Custom Pricing (Price per 1000 reaction)</h3>
+                <h3>Base Rate (Price per 1000 reactions)</h3>
                 <div class="form-group">
-                    <label>Price in ₹ (e.g. 50)</label>
-                    <input type="number" id="custom_rate" placeholder="e.g. 50">
+                    <label>Base Rate in ₹ (e.g. 15)</label>
+                    <input type="number" id="custom_rate" placeholder="e.g. 15">
                 </div>
-                <button id="btn-custom_rate" onclick="saveSetting('custom_rate', 'btn-custom_rate')">Update Custom Rate</button>
+                <button id="btn-custom_rate" onclick="saveSetting('custom_rate', 'btn-custom_rate')">Update Base Rate</button>
             </div>
         </div>
 
@@ -102,21 +102,35 @@
             </div>
         </div>
 
-        <!-- TAB: Packages -->
+        <!-- TAB: Packages (UPDATED FOR NEW FORMAT) -->
         <div id="tab-packages" class="tab-content">
             <div class="header"><h1>Manage Packages</h1></div>
             <div class="card">
                 <h3>Add New Package</h3>
                 <div class="grid-2">
-                    <div class="form-group"><label>Package Name</label><input type="text" id="pkgName" placeholder="e.g. 1 Month Premium"></div>
-                    <div class="form-group"><label>Price (₹)</label><input type="number" id="pkgPrice" placeholder="e.g. 1000"></div>
+                    <div class="form-group"><label>Qty per post</label><input type="number" id="pkgQty" placeholder="e.g. 200"></div>
+                    <div class="form-group"><label>Posts per Day</label><input type="number" id="pkgPosts" placeholder="e.g. 10"></div>
                 </div>
-                <div class="form-group"><label>Duration (Days)</label><input type="number" id="pkgDays" placeholder="e.g. 30"></div>
+                <div class="grid-2">
+                    <div class="form-group"><label>Duration (Days)</label><input type="number" id="pkgDays" placeholder="e.g. 7"></div>
+                    <div class="form-group"><label>Total Price (₹)</label><input type="number" id="pkgPrice" placeholder="e.g. 210"></div>
+                </div>
                 <button id="btn-addpackage" onclick="addPackage()">Add Package</button>
             </div>
             <div class="card">
                 <h3>Active Packages</h3>
-                <table><thead><tr><th>Package Name</th><th>Price</th><th>Days</th><th>Action</th></tr></thead><tbody id="packageTableBody"><tr><td colspan="4">Loading...</td></tr></tbody></table>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Qty/Post</th>
+                            <th>Posts/Day</th>
+                            <th>Days</th>
+                            <th>Price</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="packageTableBody"><tr><td colspan="5">Loading...</td></tr></tbody>
+                </table>
             </div>
         </div>
 
