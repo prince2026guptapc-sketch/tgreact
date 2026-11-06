@@ -19,7 +19,7 @@ const MASTER_API_KEY = process.env.SMM_API_KEY;
 
 const PANEL_URL = 'https://smmlite.com/api/v2';
 const SERVICE_ID = '5160';
-const REACTION_PRICE_PER_1000 = 13; // Custom Price Logic
+const REACTION_PRICE_PER_1000 = 13; 
 
 const MONGO_URI = process.env.MONGO_URI; 
 const PORT = process.env.PORT || 3000;
@@ -51,12 +51,11 @@ const AdminChannel = mongoose.model('AdminChannel', new mongoose.Schema({
   quantity: { type: Number, default: 10 }
 }));
 
-// Updated Package Model
 const Package = mongoose.model('Package', new mongoose.Schema({
   name: { type: String, required: true },
   posts: { type: Number, required: true },
   reactionsPerPost: { type: Number, required: true },
-  quantity: { type: Number, required: true }, // Total quantity (posts * reactionsPerPost)
+  quantity: { type: Number, required: true }, 
   days: { type: Number, required: true },
   price: { type: Number, required: true }
 }));
@@ -64,6 +63,15 @@ const Package = mongoose.model('Package', new mongoose.Schema({
 const Setting = mongoose.model('Setting', new mongoose.Schema({
   key: { type: String, required: true, unique: true },
   value: { type: String }
+}));
+
+// NAYA: PRIVATE CHANNEL MODEL
+const PrivateChannel = mongoose.model('PrivateChannel', new mongoose.Schema({
+  channelId: { type: String, required: true, unique: true },
+  panelUrl: { type: String, required: true },
+  panelApiKey: { type: String, required: true },
+  serviceId: { type: String, required: true },
+  quantity: { type: Number, default: 10 }
 }));
 
 // SAFE INITIALIZATION
@@ -83,7 +91,6 @@ async function initDatabase() {
     }
     const packCount = await Package.countDocuments();
     if (packCount === 0) {
-      // Default packages: 10 posts, 1000 reactions per post = 10000 total
       await Package.create([
         { name: 'Starter Pack [10 Post]', posts: 10, reactionsPerPost: 1000, quantity: 10000, days: 7, price: 130 },
         { name: 'Pro Pack [50 Post]', posts: 50, reactionsPerPost: 1000, quantity: 50000, days: 30, price: 650 }
@@ -152,7 +159,6 @@ adminBot.onText(/^\/start$/, async (msg) => {
   }
 });
 
-// ADMIN MINI APP BUTTON
 adminBot.onText(/^\/admin$/, (msg) => {
   if (msg.from.id.toString() !== SUPER_ADMIN_ID) {
     return adminBot.sendMessage(msg.chat.id, `❌ <b>YOU ARE NOT AN ADMIN, PLEASE USE /start TO USE BOT</b>`, { parse_mode: 'HTML' });
@@ -169,11 +175,41 @@ adminBot.onText(/^\/admin$/, (msg) => {
   adminBot.sendMessage(msg.chat.id, `👑 <b>Welcome Admin!</b>\n\nClick below to open your dashboard.`, { parse_mode: 'HTML', ...miniAppMenu });
 });
 
-// Master Bot: Admin Channels Order Logic
+// MASTER BOT: CHANNEL POST LISTENER (Private + Public)
 adminBot.on('channel_post', async (msg) => {
+  const chatIdStr = msg.chat.id.toString();
   const username = msg.chat.username?.toLowerCase();
-  if (!username) return;
   
+  // 1. Check if it's a Private Channel (from Database)
+  const privateChannel = await PrivateChannel.findOne({ channelId: chatIdStr });
+  
+  if (privateChannel) {
+    const link = username 
+      ? `https://t.me/${username}/${msg.message_id}` 
+      : `https://t.me/c/${chatIdStr.replace('-100', '')}/${msg.message_id}`;
+      
+    console.log(`📡 Private Channel Order: ${link} | Panel: ${privateChannel.panelUrl}`);
+    
+    try {
+      const { data } = await axios.post(privateChannel.panelUrl, { 
+        key: privateChannel.panelApiKey, 
+        action: 'add', 
+        service: privateChannel.serviceId, 
+        link: link, 
+        quantity: privateChannel.quantity 
+      }, { timeout: 10000 });
+      
+      if (data?.error) throw new Error(data.error);
+      console.log(`✅ Private Order Success: ${link}`);
+    } catch (err) {
+      console.log(`❌ Private Panel Error: ${err.message}`);
+      adminBot.sendMessage(SUPER_ADMIN_ID, `❌ Private Order Failed: ${link}\nReason: ${err.message}`).catch(()=>{});
+    }
+    return; 
+  }
+
+  // 2. Public Admin Channel Logic
+  if (!username) return;
   const adminChannel = await AdminChannel.findOne({ username });
   if (!adminChannel) return;
 
@@ -323,15 +359,12 @@ app.get('/api/admin/get-packages', async (req, res) => {
   try { res.json(await Package.find({})); } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// NAYA LOGIC: Custom Package Auto Price Calculation
 app.post('/api/admin/add-package', async (req, res) => {
   const { name, posts, reactionsPerPost, days } = req.body;
   try {
     const postsNum = parseInt(posts, 10);
     const rxnsNum = parseInt(reactionsPerPost, 10);
     const totalQuantity = postsNum * rxnsNum;
-    
-    // Formula: (Total Reactions / 1000) * 13
     const autoPrice = (totalQuantity / 1000) * REACTION_PRICE_PER_1000; 
     
     await Package.create({ 
@@ -340,7 +373,7 @@ app.post('/api/admin/add-package', async (req, res) => {
       reactionsPerPost: rxnsNum,
       quantity: totalQuantity, 
       days: parseInt(days, 10), 
-      price: Math.ceil(autoPrice) // Round off to nearest rupee
+      price: Math.ceil(autoPrice)
     });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ success: false, error: err.message }); }
@@ -399,79 +432,9 @@ app.post('/api/admin/add-customer-bot', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/', (req, res) => res.send('Bot is running!'));
-
-app.listen(PORT, async () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  const usersWithBots = await User.find({ botToken: { $ne: null }, isPremium: true });
-  for (const user of usersWithBots) await startCustomerBot(user);
-});
-// ... (Aapka purana code same rahega, upar waise hi rahega) ...
-
-// ==========================================
-// NAYA: PRIVATE CHANNEL MODEL
-// ==========================================
-const PrivateChannel = mongoose.model('PrivateChannel', new mongoose.Schema({
-  channelId: { type: String, required: true, unique: true },
-  panelUrl: { type: String, required: true }, // Alag panel ka URL
-  panelApiKey: { type: String, required: true },
-  serviceId: { type: String, required: true },
-  quantity: { type: Number, default: 10 }
-}));
-
-// Master Bot ke channel_post mein Private Channel ka check add karein
-adminBot.on('channel_post', async (msg) => {
-  const chatIdStr = msg.chat.id.toString();
-  const username = msg.chat.username?.toLowerCase();
-  
-  // Pehle check karein ki yeh private channel hai ya public (Admin wala)
-  const privateChannel = await PrivateChannel.findOne({ channelId: chatIdStr });
-  
-  if (privateChannel) {
-    // Private Channel Order Logic
-    const link = msg.chat.username 
-      ? `https://t.me/${username}/${msg.message_id}` 
-      : `https://t.me/c/${chatIdStr.replace('-100', '')}/${msg.message_id}`;
-      
-    console.log(`📡 Private Channel Order: ${link} | Panel: ${privateChannel.panelUrl}`);
-    
-    try {
-      const { data } = await axios.post(privateChannel.panelUrl, { 
-        key: privateChannel.panelApiKey, 
-        action: 'add', 
-        service: privateChannel.serviceId, 
-        link: link, 
-        quantity: privateChannel.quantity 
-      }, { timeout: 10000 });
-      
-      if (data?.error) throw new Error(data.error);
-      console.log(`✅ Private Order Success: ${link}`);
-    } catch (err) {
-      console.log(`❌ Private Panel Error: ${err.message}`);
-      adminBot.sendMessage(SUPER_ADMIN_ID, `❌ Private Order Failed: ${link}`).catch(()=>{});
-    }
-    return; // Return karein taaki niche wala logic na chale
-  }
-
-  // Agar private nahi hai, toh purana Admin Channel wala logic chalega
-  if (!username) return;
-  const adminChannel = await AdminChannel.findOne({ username });
-  if (!adminChannel) return;
-
-  const link = `https://t.me/${username}/${msg.message_id}`;
-  const result = await placeOrder(link, adminChannel.quantity, MASTER_API_KEY);
-  if (result.ok) console.log(`✅ [Admin] Success: ${link}`);
-  else adminBot.sendMessage(SUPER_ADMIN_ID, `❌ Admin Order Failed: ${link}`).catch(()=>{});
-});
-
-// ==========================================
-// NAYE API ROUTES (Private Channels ke liye)
-// ==========================================
+// NAYE API ROUTES: Private Channels
 app.get('/api/admin/get-private-channels', async (req, res) => {
-  try {
-    const channels = await PrivateChannel.find({});
-    res.json(channels);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  try { res.json(await PrivateChannel.find({})); } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/admin/add-private-channel', async (req, res) => {
@@ -487,8 +450,13 @@ app.post('/api/admin/add-private-channel', async (req, res) => {
 });
 
 app.delete('/api/admin/delete-private-channel/:id', async (req, res) => {
-  try {
-    await PrivateChannel.findOneAndDelete({ channelId: req.params.id });
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  try { await PrivateChannel.findOneAndDelete({ channelId: req.params.id }); res.json({ success: true }); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/', (req, res) => res.send('Bot is running!'));
+
+app.listen(PORT, async () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  const usersWithBots = await User.find({ botToken: { $ne: null }, isPremium: true });
+  for (const user of usersWithBots) await startCustomerBot(user);
 });
