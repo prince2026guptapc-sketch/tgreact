@@ -19,6 +19,7 @@
         <button class="nav-btn" onclick="openTab('tab-channels', this)">📡 Channels</button>
         <button class="nav-btn" onclick="openTab('tab-packages', this)">📦 Packages</button>
         <button class="nav-btn" onclick="openTab('tab-users', this)">👥 Users</button>
+        <button class="nav-btn" onclick="openTab('tab-private', this)">🔒 Private Channels</button>
         <button class="nav-btn" onclick="logout()" style="color: var(--danger); margin-top: auto;">🚪 Logout</button>
 
         <div class="theme-switcher">
@@ -136,6 +137,31 @@
             </div>
         </div>
     </div>
+            <!-- TAB: Private Channels -->
+        <div id="tab-private" class="tab-content">
+            <div class="header"><h1>Private Channels</h1></div>
+            <div class="card">
+                <h3>Add Private Channel</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Yahan sirf Private Channel ki ID dalein (jaise -1001234567890).</p>
+                <div class="grid-2">
+                    <div class="form-group"><label>Channel ID</label><input type="text" id="pcChannelId" placeholder="e.g. -1001234567890"></div>
+                    <div class="form-group"><label>Panel URL</label><input type="text" id="pcPanelUrl" placeholder="https://panel.com/api/v2"></div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group"><label>Panel API Key</label><input type="text" id="pcPanelApiKey" placeholder="API Key"></div>
+                    <div class="form-group"><label>Service ID</label><input type="text" id="pcServiceId" placeholder="e.g. 5160"></div>
+                </div>
+                <div class="form-group"><label>Quantity</label><input type="number" id="pcQuantity" placeholder="e.g. 1000"></div>
+                <button id="btn-addpc" onclick="addPrivateChannel()">Add Private Channel</button>
+            </div>
+            <div class="card">
+                <h3>Active Private Channels</h3>
+                <table>
+                    <thead><tr><th>Channel ID</th><th>Panel</th><th>Service ID</th><th>Quantity</th><th>Action</th></tr></thead>
+                    <tbody id="pcTableBody"><tr><td colspan="5">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
 
     <div id="toast" class="toast">Done!</div>
     <script src="script.js"></script>
