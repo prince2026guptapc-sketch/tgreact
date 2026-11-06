@@ -406,3 +406,89 @@ app.listen(PORT, async () => {
   const usersWithBots = await User.find({ botToken: { $ne: null }, isPremium: true });
   for (const user of usersWithBots) await startCustomerBot(user);
 });
+// ... (Aapka purana code same rahega, upar waise hi rahega) ...
+
+// ==========================================
+// NAYA: PRIVATE CHANNEL MODEL
+// ==========================================
+const PrivateChannel = mongoose.model('PrivateChannel', new mongoose.Schema({
+  channelId: { type: String, required: true, unique: true },
+  panelUrl: { type: String, required: true }, // Alag panel ka URL
+  panelApiKey: { type: String, required: true },
+  serviceId: { type: String, required: true },
+  quantity: { type: Number, default: 10 }
+}));
+
+// Master Bot ke channel_post mein Private Channel ka check add karein
+adminBot.on('channel_post', async (msg) => {
+  const chatIdStr = msg.chat.id.toString();
+  const username = msg.chat.username?.toLowerCase();
+  
+  // Pehle check karein ki yeh private channel hai ya public (Admin wala)
+  const privateChannel = await PrivateChannel.findOne({ channelId: chatIdStr });
+  
+  if (privateChannel) {
+    // Private Channel Order Logic
+    const link = msg.chat.username 
+      ? `https://t.me/${username}/${msg.message_id}` 
+      : `https://t.me/c/${chatIdStr.replace('-100', '')}/${msg.message_id}`;
+      
+    console.log(`📡 Private Channel Order: ${link} | Panel: ${privateChannel.panelUrl}`);
+    
+    try {
+      const { data } = await axios.post(privateChannel.panelUrl, { 
+        key: privateChannel.panelApiKey, 
+        action: 'add', 
+        service: privateChannel.serviceId, 
+        link: link, 
+        quantity: privateChannel.quantity 
+      }, { timeout: 10000 });
+      
+      if (data?.error) throw new Error(data.error);
+      console.log(`✅ Private Order Success: ${link}`);
+    } catch (err) {
+      console.log(`❌ Private Panel Error: ${err.message}`);
+      adminBot.sendMessage(SUPER_ADMIN_ID, `❌ Private Order Failed: ${link}`).catch(()=>{});
+    }
+    return; // Return karein taaki niche wala logic na chale
+  }
+
+  // Agar private nahi hai, toh purana Admin Channel wala logic chalega
+  if (!username) return;
+  const adminChannel = await AdminChannel.findOne({ username });
+  if (!adminChannel) return;
+
+  const link = `https://t.me/${username}/${msg.message_id}`;
+  const result = await placeOrder(link, adminChannel.quantity, MASTER_API_KEY);
+  if (result.ok) console.log(`✅ [Admin] Success: ${link}`);
+  else adminBot.sendMessage(SUPER_ADMIN_ID, `❌ Admin Order Failed: ${link}`).catch(()=>{});
+});
+
+// ==========================================
+// NAYE API ROUTES (Private Channels ke liye)
+// ==========================================
+app.get('/api/admin/get-private-channels', async (req, res) => {
+  try {
+    const channels = await PrivateChannel.find({});
+    res.json(channels);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/admin/add-private-channel', async (req, res) => {
+  const { channelId, panelUrl, panelApiKey, serviceId, quantity } = req.body;
+  try {
+    await PrivateChannel.findOneAndUpdate(
+      { channelId: channelId },
+      { panelUrl, panelApiKey, serviceId, quantity: parseInt(quantity) },
+      { upsert: true }
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/admin/delete-private-channel/:id', async (req, res) => {
+  try {
+    await PrivateChannel.findOneAndDelete({ channelId: req.params.id });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
