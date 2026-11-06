@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SMM Bot Pro Dashboard</title>
+    <title>REACTION MASTER</title>
     <link rel="stylesheet" href="style.css">
     <script>
-        // SECURITY CHECK
         if(localStorage.getItem('adminLoggedIn') !== 'true') { window.location.href = 'login.html'; }
     </script>
 </head>
@@ -25,11 +24,11 @@
         <div class="theme-switcher">
             <div class="theme-title">Change Theme</div>
             <div class="theme-btns">
-                <div class="color-dot dot-dark" onclick="changeTheme('')" title="Dark Theme"></div>
-                <div class="color-dot dot-light" onclick="changeTheme('theme-light')" title="Light Theme"></div>
-                <div class="color-dot dot-purple" onclick="changeTheme('theme-purple')" title="Purple Theme"></div>
-                <div class="color-dot dot-green" onclick="changeTheme('theme-green')" title="Green Theme"></div>
-                <div class="color-dot dot-red" onclick="changeTheme('theme-red')" title="Red Theme"></div>
+                <div class="color-dot dot-dark" onclick="changeTheme('')"></div>
+                <div class="color-dot dot-light" onclick="changeTheme('theme-light')"></div>
+                <div class="color-dot dot-purple" onclick="changeTheme('theme-purple')"></div>
+                <div class="color-dot dot-green" onclick="changeTheme('theme-green')"></div>
+                <div class="color-dot dot-red" onclick="changeTheme('theme-red')"></div>
             </div>
         </div>
     </div>
@@ -47,7 +46,6 @@
         <!-- TAB: Settings -->
         <div id="tab-settings" class="tab-content">
             <div class="header"><h1>Settings</h1></div>
-            
             <div class="card">
                 <h3>Update Login Credentials</h3>
                 <div class="grid-2">
@@ -56,21 +54,19 @@
                 </div>
                 <button id="btn-update-cred" onclick="updateCredentials()">Update Credentials</button>
             </div>
-
             <div class="card">
                 <h3>UPI Configuration</h3>
-                <div class="form-group"><label>UPI ID (For receiving INR payments)</label><input type="text" id="upi_id" placeholder="e.g. yourname@ybl"></div>
+                <div class="form-group"><label>UPI ID</label><input type="text" id="upi_id" placeholder="e.g. yourname@ybl"></div>
                 <button id="btn-upi_id" onclick="saveSetting('upi_id', 'btn-upi_id')">Update UPI ID</button>
             </div>
-            
             <div class="card">
-                <h3>USDT Addresses (Crypto Payments)</h3>
+                <h3>USDT Addresses</h3>
                 <div class="grid-2">
                     <div class="form-group"><label>TRC20 Address</label><input type="text" id="usdt_trc20" placeholder="T..."></div>
-                    <div class="form-group"><label>BSC (BEP20) Address</label><input type="text" id="usdt_bsc" placeholder="0x..."></div>
+                    <div class="form-group"><label>BSC Address</label><input type="text" id="usdt_bsc" placeholder="0x..."></div>
                 </div>
                 <div class="form-group"><label>TRON Address</label><input type="text" id="usdt_tron" placeholder="T..."></div>
-                <button id="btn-usdt_all" onclick="saveAllUsdt()">Update All USDT Addresses</button>
+                <button id="btn-usdt_all" onclick="saveAllUsdt()">Update All USDT</button>
             </div>
         </div>
 
@@ -91,14 +87,14 @@
             </div>
         </div>
 
-        <!-- TAB: Packages (CUSTOM REACTION LOGIC) -->
+        <!-- TAB: Packages -->
         <div id="tab-packages" class="tab-content">
             <div class="header"><h1>Custom Packages</h1></div>
             <div class="card">
                 <h3>Create Custom Package</h3>
                 <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Price is auto-calculated at <b>₹13 per 1000 reactions per post</b>.</p>
                 <div class="grid-2">
-                    <div class="form-group"><label>Package Name</label><input type="text" id="pkgName" placeholder="e.g. Starter Pack [10 Post]"></div>
+                    <div class="form-group"><label>Package Name</label><input type="text" id="pkgName" placeholder="e.g. Starter Pack"></div>
                     <div class="form-group"><label>Number of Posts</label><input type="number" id="pkgPosts" placeholder="e.g. 10"></div>
                 </div>
                 <div class="grid-2">
@@ -110,7 +106,7 @@
             <div class="card">
                 <h3>Active Packages</h3>
                 <table>
-                    <thead><tr><th>Name</th><th>Posts</th><th>Reactions/Post</th><th>Total Quantity</th><th>Price</th><th>Days</th><th>Action</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Posts</th><th>Reactions/Post</th><th>Total</th><th>Price</th><th>Days</th><th>Action</th></tr></thead>
                     <tbody id="packageTableBody"><tr><td colspan="7">Loading...</td></tr></tbody>
                 </table>
             </div>
@@ -123,37 +119,57 @@
                 <h3>Add / Update Customer Bot</h3>
                 <div class="grid-2">
                     <div class="form-group"><label>Customer User ID</label><input type="text" id="botUserId" placeholder="e.g. 6402927432"></div>
-                    <div class="form-group"><label>Bot Token</label><input type="text" id="botToken" placeholder="123456:ABC-DEF..."></div>
+                    <div class="form-group"><label>Bot Token</label><input type="text" id="botToken" placeholder="123456:ABC..."></div>
                 </div>
                 <div class="grid-2">
-                    <div class="form-group"><label>Panel API Key (Optional)</label><input type="text" id="botApiKey" placeholder="Leave empty to use Master"></div>
+                    <div class="form-group"><label>Panel API Key (Optional)</label><input type="text" id="botApiKey" placeholder="Leave empty for Master"></div>
                     <div class="form-group"><label>Channels (Comma separated)</label><input type="text" id="botChannels" placeholder="@channel1, @channel2"></div>
                 </div>
                 <button id="btn-addbot" onclick="addCustomerBot()">Add / Update Customer Bot</button>
             </div>
             <div class="card">
-                <h3>Registered Users (For Approval)</h3>
+                <h3>Registered Users</h3>
                 <table><thead><tr><th>User Info</th><th>Status</th><th>Expiry Date</th><th>Approve Premium</th></tr></thead><tbody id="userTableBody"><tr><td colspan="4">Loading...</td></tr></tbody></table>
             </div>
         </div>
-    </div>
-            <!-- TAB: Private Channels -->
+
+        <!-- TAB: Private Channels (FIXED UI) -->
         <div id="tab-private" class="tab-content">
             <div class="header"><h1>Private Channels</h1></div>
             <div class="card">
                 <h3>Add Private Channel</h3>
-                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Yahan sirf Private Channel ki ID dalein (jaise -1001234567890).</p>
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Yahan Channel ID dalein (jaise -1002257983121).</p>
+                
                 <div class="grid-2">
-                    <div class="form-group"><label>Channel ID</label><input type="text" id="pcChannelId" placeholder="e.g. -1001234567890"></div>
-                    <div class="form-group"><label>Panel URL</label><input type="text" id="pcPanelUrl" placeholder="https://panel.com/api/v2"></div>
+                    <div class="form-group">
+                        <label>Channel ID</label>
+                        <input type="text" id="pcChannelId" placeholder="e.g. -1002257983121">
+                    </div>
+                    <div class="form-group">
+                        <label>Panel URL</label>
+                        <input type="text" id="pcPanelUrl" placeholder="https://panel.com/api/v2">
+                    </div>
                 </div>
+
                 <div class="grid-2">
-                    <div class="form-group"><label>Panel API Key</label><input type="text" id="pcPanelApiKey" placeholder="API Key"></div>
-                    <div class="form-group"><label>Service ID</label><input type="text" id="pcServiceId" placeholder="e.g. 5160"></div>
+                    <div class="form-group">
+                        <label>Panel API Key</label>
+                        <input type="text" id="pcPanelApiKey" placeholder="API Key">
+                    </div>
+                    <div class="form-group">
+                        <label>Service ID</label>
+                        <input type="text" id="pcServiceId" placeholder="e.g. 5160">
+                    </div>
                 </div>
-                <div class="form-group"><label>Quantity</label><input type="number" id="pcQuantity" placeholder="e.g. 1000"></div>
+
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" id="pcQuantity" placeholder="e.g. 1000">
+                </div>
+
                 <button id="btn-addpc" onclick="addPrivateChannel()">Add Private Channel</button>
             </div>
+            
             <div class="card">
                 <h3>Active Private Channels</h3>
                 <table>
@@ -162,6 +178,8 @@
                 </table>
             </div>
         </div>
+
+    </div>
 
     <div id="toast" class="toast">Done!</div>
     <script src="script.js"></script>
