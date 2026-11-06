@@ -23,6 +23,7 @@ function openTab(tabId, btn) {
     if(tabId === 'tab-packages') loadPackages();
     if(tabId === 'tab-settings') loadSettings();
     if(tabId === 'tab-channels') loadChannels();
+    if(tabId === 'tab-private') loadPrivateChannels();
 }
 
 function showToast(msg, isError = false) {
@@ -276,4 +277,58 @@ async function addCustomerBot() {
     } else {
         showToast('Error adding bot', true);
     }
+}
+// --- 6. Private Channels ---
+async function loadPrivateChannels() {
+    const res = await fetch(`${API}/api/admin/get-private-channels`);
+    const channels = await res.json();
+    const tbody = document.getElementById('pcTableBody');
+    tbody.innerHTML = channels.length ? '' : '<tr><td colspan="5">No private channels added.</td></tr>';
+    
+    channels.forEach(c => {
+        tbody.innerHTML += `
+            <tr>
+                <td><code>${c.channelId}</code></td>
+                <td>${c.panelUrl}</td>
+                <td>${c.serviceId}</td>
+                <td>${c.quantity}</td>
+                <td><button class="btn-danger" onclick="deletePrivateChannel('${c.channelId}')">Delete</button></td>
+            </tr>
+        `;
+    });
+}
+
+async function addPrivateChannel() {
+    const channelId = document.getElementById('pcChannelId').value;
+    const panelUrl = document.getElementById('pcPanelUrl').value;
+    const panelApiKey = document.getElementById('pcPanelApiKey').value;
+    const serviceId = document.getElementById('pcServiceId').value;
+    const quantity = document.getElementById('pcQuantity').value;
+
+    if(!channelId || !panelUrl || !panelApiKey || !serviceId || !quantity) {
+        return showToast('Please fill all fields!', true);
+    }
+
+    const res = await fetch(`${API}/api/admin/add-private-channel`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ channelId, panelUrl, panelApiKey, serviceId, quantity })
+    });
+
+    if(res.ok) {
+        document.getElementById('pcChannelId').value = '';
+        document.getElementById('pcPanelUrl').value = '';
+        document.getElementById('pcPanelApiKey').value = '';
+        document.getElementById('pcServiceId').value = '';
+        document.getElementById('pcQuantity').value = '';
+        showTick('btn-addpc', 'Add Private Channel');
+        loadPrivateChannels();
+    } else {
+        showToast('Error adding channel', true);
+    }
+}
+
+async function deletePrivateChannel(channelId) {
+    if(!confirm('Delete this channel?')) return;
+    await fetch(`${API}/api/admin/delete-private-channel/${channelId}`, { method: 'DELETE' });
+    loadPrivateChannels();
 }
