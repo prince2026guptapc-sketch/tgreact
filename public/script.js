@@ -23,7 +23,7 @@ function openTab(tabId, btn) {
     if(tabId === 'tab-packages') loadPackages();
     if(tabId === 'tab-settings') loadSettings();
     if(tabId === 'tab-channels') loadChannels();
-    if(tabId === 'tab-private') loadPrivateChannels();
+    if(tabId === 'tab-private') loadPrivateChannels(); // Naya Tab
 }
 
 function showToast(msg, isError = false) {
@@ -45,7 +45,6 @@ function showTick(btnId, originalText) {
     }, 2000);
 }
 
-// --- LOGOUT ---
 function logout() {
     localStorage.removeItem('adminLoggedIn');
     window.location.href = 'login.html';
@@ -135,7 +134,7 @@ async function deleteChannel(username) {
     loadChannels();
 }
 
-// --- 3. Packages (Custom Logic FIXED) ---
+// --- 3. Packages ---
 async function loadPackages() {
     const res = await fetch(`${API}/api/admin/get-packages`);
     const packages = await res.json();
@@ -278,7 +277,8 @@ async function addCustomerBot() {
         showToast('Error adding bot', true);
     }
 }
-// --- 6. Private Channels ---
+
+// --- 6. Private Channels (Naya) ---
 async function loadPrivateChannels() {
     const res = await fetch(`${API}/api/admin/get-private-channels`);
     const channels = await res.json();
